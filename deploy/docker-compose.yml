@@ -1,0 +1,58 @@
+# Docker Compose for symkernel.
+#
+# Z3 integration approach: dedicated `z3` service.
+#
+# Chosen approach: z3 service (over building Z3 from source in the
+# builder stage).  Rationale:
+#   - Uses the well-maintained official z3prover/z3 Docker image,
+#     avoiding complex source-build logic and long CI compilation
+#     times (~10 min).
+#   - Independent versioning — Z3 can be pinned and upgraded
+#     separately from the Go image.
+#   - The z3 binary is shared with the symkerneld container via a
+#     named volume so that exec.Command("z3", "-in") in
+#     internal/verify/z3.go works without code changes.
+#
+# Alternative considered: building Z3 from source in
+# deploy/Dockerfile's builder stage.  Rejected because it adds
+# compilation overhead, increases image size, and couples Z3
+# versioning to the Go build pipeline.
+
+services:
+  # Z3 SMT solver — provides the z3 binary via a shared volume.
+  z3:
+    image: z3prover/z3:ubuntu-22.04
+    container_name: symkernel-z3
+    volumes:
+      - z3-bin:/z3-out
+    # Copy the z3 binary into the shared volume on startup, then idle.
+    entrypoint: ["/bin/sh", "-c", "cp /usr/bin/z3 /z3-out/z3 && sleep infinity"]
+    healthcheck:
+      test: ["test", "-f", "/z3-out/z3"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  symkerneld:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: symkerneld
+    ports:
+      - "${SYMKERNEL_PORT:-8080}:8080"
+    volumes:
+      - z3-bin:/opt/z3:ro
+    environment:
+      - SYMKERNEL_ADDR=:8080
+    # Prepend the shared-volume z3 directory to PATH before exec-ing
+    # the real entrypoint, so exec.Command("z3", "-in") resolves
+    # correctly.
+    entrypoint: ["/bin/sh", "-c", "export PATH=/opt/z3:$$PATH && exec symkerneld"]
+    depends_on:
+      z3:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  z3-bin:
