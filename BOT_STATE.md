@@ -1,23 +1,23 @@
 # Bot State
 
-_Last updated: 2026-07-19 18:34 UTC by patrol_
+_Last updated: 2026-07-19 18:51 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 5 |
+| Pending | 7 |
 | Active (running/reviewing) | 1 |
 | Blocked | 4 |
-| Completed/Merged (all time) | 24 |
+| Completed/Merged (all time) | 25 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #24 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-19 |
 | #35 | Fix WasmAgent/symkernel#28 ([milestone Milestone 4 ] `sch... | merged/merged | 2026-07-19 |
-| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 
