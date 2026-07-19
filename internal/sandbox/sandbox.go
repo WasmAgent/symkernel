@@ -6,8 +6,10 @@ package sandbox
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -16,6 +18,39 @@ import (
 
 // wasmPageSize is the WebAssembly page size in bytes (64 KiB).
 const wasmPageSize = 65536
+
+// TrapKind enumerates the categories of WASM traps the sandbox surfaces as
+// structured errors. The string values are the "<trap_kind>" payload of the
+// trap → error protocol (see TrapInfo).
+type TrapKind string
+
+const (
+	// TrapKindUnreachable is emitted when the guest executed the "unreachable"
+	// instruction.
+	TrapKindUnreachable TrapKind = "unreachable"
+
+	// TrapKindMemoryOOB is emitted when the guest accessed linear memory
+	// outside its bounds.
+	TrapKindMemoryOOB TrapKind = "memory_oob"
+
+	// TrapKindStackOverflow is emitted when the guest exhausted the call stack.
+	TrapKindStackOverflow TrapKind = "stack_overflow"
+
+	// TrapKindTimeout is emitted when the guest exceeded the configured
+	// wall-clock deadline (timeoutMs).
+	TrapKindTimeout TrapKind = "timeout"
+)
+
+// TrapInfo is the structured representation of a WASM trap. It serializes to
+// the trap → error protocol payload {"kind":"<trap_kind>","message":"..."}.
+type TrapInfo struct {
+	// Kind is the categorized trap kind (one of the TrapKind constants).
+	Kind TrapKind `json:"kind"`
+
+	// Message is the underlying error message produced by the runtime, kept
+	// verbatim for diagnostics (it may include the wasm stack trace).
+	Message string `json:"message"`
+}
 
 // SandboxResult captures the observable side-effects of a sandboxed execution.
 type SandboxResult struct {
@@ -28,6 +63,12 @@ type SandboxResult struct {
 	// ExitCode is the exit code returned by the guest via WASI proc_exit,
 	// or 0 if the module's _start function returned normally.
 	ExitCode int32
+
+	// Trap is non-nil when the guest triggered a WASM trap (unreachable,
+	// out-of-bounds memory access, stack overflow) or exceeded the sandbox
+	// timeout. It is nil for normal exits, proc_exit, and non-trap errors
+	// such as an invalid module or base64 decode failure.
+	Trap *TrapInfo
 }
 
 // Run decodes the base64-encoded Wasm module in wasmModuleB64 and executes it
@@ -90,10 +131,13 @@ func Run(wasmModuleB64 string, args map[string]any, memLimitMB int, timeoutMs in
 	mod, err := r.InstantiateWithConfig(ctx, wasmBytes, mConfig)
 	if err != nil {
 		// If the module exited via WASI proc_exit, extract the exit code.
+		// Classify the error into the structured trap protocol when it
+		// corresponds to a recognized WASM trap or a sandbox timeout.
 		return SandboxResult{
-			Stdout:  stdoutBuf.Bytes(),
-			Stderr:  stderrBuf.Bytes(),
+			Stdout:   stdoutBuf.Bytes(),
+			Stderr:   stderrBuf.Bytes(),
 			ExitCode: exitCodeFromErr(err),
+			Trap:     trapFromErr(err),
 		}, err
 	}
 
@@ -148,6 +192,40 @@ func exitCodeFromErr(err error) int32 {
 		return int32(ec.ExitCode())
 	}
 	return 0
+}
+
+// trapFromErr classifies an error returned by the wazero runtime into the
+// structured trap → error protocol. It returns nil for non-trap errors such
+// as a normal WASI proc_exit, a base64 decode failure, or a module
+// instantiation/link error.
+//
+// wazero surfaces WASM traps as errors of the form
+// "... wasm error: <reason>\nwasm stack trace: ...", and surfaces a context
+// deadline as a *sys.ExitError that satisfies errors.Is(err,
+// context.DeadlineExceeded).
+func trapFromErr(err error) *TrapInfo {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+
+	// Timeout: wazero closes the module with ExitCodeDeadlineExceeded when
+	// the supplied context deadline fires. The resulting error matches
+	// context.DeadlineExceeded via errors.Is.
+	if errors.Is(err, context.DeadlineExceeded) {
+		return &TrapInfo{Kind: TrapKindTimeout, Message: msg}
+	}
+
+	switch {
+	case strings.Contains(msg, "unreachable"):
+		return &TrapInfo{Kind: TrapKindUnreachable, Message: msg}
+	case strings.Contains(msg, "out of bounds memory access"):
+		return &TrapInfo{Kind: TrapKindMemoryOOB, Message: msg}
+	case strings.Contains(msg, "stack overflow"):
+		return &TrapInfo{Kind: TrapKindStackOverflow, Message: msg}
+	}
+
+	return nil
 }
 
 // limitedBuffer is a byte buffer that implements io.Writer with an
