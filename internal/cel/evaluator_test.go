@@ -2,6 +2,10 @@ package cel
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -190,5 +194,206 @@ func TestEvaluate_StringSize(t *testing.T) {
 	}
 	if result != int64(5) {
 		t.Errorf("result = %v (%T), want 5", result, result)
+	}
+}
+
+// --- HTTP handler tests for POST /v1/verify/cel ---
+
+func TestHandler_ValidExpr(t *testing.T) {
+	handler := Handler()
+
+	body := `{"input":{"expr":"\"hello\" + \" \" + \"world\""}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Result.Ok {
+		t.Errorf("ok = false, want true")
+	}
+	if resp.Result.Value != "hello world" {
+		t.Errorf("value = %v, want %q", resp.Result.Value, "hello world")
+	}
+	if resp.Result.EvalMs <= 0 {
+		t.Errorf("evalMs = %v, want > 0", resp.Result.EvalMs)
+	}
+}
+
+func TestHandler_WithContextVars(t *testing.T) {
+	handler := Handler()
+
+	body := `{"input":{"expr":"x + y * 2","context":{"x":10,"y":3}}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Result.Ok {
+		t.Errorf("ok = false, want true; value = %v", resp.Result.Value)
+	}
+	// JSON round-trip produces float64 for numbers.
+	if resp.Result.Value != float64(16) {
+		t.Errorf("value = %v (%T), want 16", resp.Result.Value, resp.Result.Value)
+	}
+}
+
+func TestHandler_CompileError(t *testing.T) {
+	handler := Handler()
+
+	body := `{"input":{"expr":"!!!invalid"}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Result.Ok {
+		t.Error("ok = true, want false for compile error")
+	}
+	if resp.Result.Value == nil {
+		t.Error("value is nil, want error message")
+	}
+}
+
+func TestHandler_TypeMismatch(t *testing.T) {
+	handler := Handler()
+
+	body := `{"input":{"expr":"x + y","context":{"x":42,"y":"hello"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Result.Ok {
+		t.Error("ok = true, want false for type mismatch")
+	}
+}
+
+func TestHandler_EmptyExpr(t *testing.T) {
+	handler := Handler()
+
+	body := `{"input":{"expr":""}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandler_InvalidJSON(t *testing.T) {
+	handler := Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandler_Timeout(t *testing.T) {
+	handler := Handler()
+
+	// Use a very small timeout_ms; CEL is fast so the expression may
+	// succeed before the deadline. The key assertion is the handler
+	// returns without hanging.
+	body := `{"input":{"expr":"1 + 1","timeout_ms":1}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	done := make(chan struct{})
+	go func() {
+		handler.ServeHTTP(rec, req)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Handler completed without hanging — success.
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler did not complete within 5 seconds")
+	}
+
+	// Accept either ok (CEL was fast enough) or error (deadline hit).
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	_ = resp.Result.Ok // value is non-deterministic for timeout tests
+}
+
+func TestHandler_DefaultTimeout(t *testing.T) {
+	handler := Handler()
+
+	// Zero timeout_ms should fall back to the default (2000ms).
+	body := `{"input":{"expr":"42 * 2","timeout_ms":0}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/cel", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp celOpaResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !resp.Result.Ok {
+		t.Errorf("ok = false, want true; value = %v", resp.Result.Value)
+	}
+	// JSON round-trip produces float64 for numbers.
+	if resp.Result.Value != float64(84) {
+		t.Errorf("value = %v (%T), want 84", resp.Result.Value, resp.Result.Value)
 	}
 }
