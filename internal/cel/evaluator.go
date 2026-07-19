@@ -22,6 +22,78 @@ import (
 // passes a context with no deadline.
 const defaultTimeoutMs = 2000
 
+// Evaluator holds a CEL environment and program for expression parsing,
+// compilation, and validation. Use NewEvaluator to create an instance, then
+// call Evaluate to assess CEL expressions against a map of arguments.
+type Evaluator struct {
+	env    *cel.Env
+	prg    cel.Program
+}
+
+// NewEvaluator initialises an Evaluator with a base CEL environment that
+// includes the standard string, list, and math extensions.
+func NewEvaluator() (*Evaluator, error) {
+	env, err := cel.NewEnv(
+		ext.Strings(),
+		ext.Lists(),
+		ext.Math(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("cel: new evaluator: %w", err)
+	}
+	return &Evaluator{env: env}, nil
+}
+
+// Evaluate parses, validates, compiles, and evaluates a CEL expression
+// against the provided args map. Variable types are inferred from the args
+// map so expressions can reference them by name. The compiled program is
+// stored on the Evaluator for potential reuse.
+//
+// It returns the boolean result of the expression, or an error for invalid
+// syntax, type mismatches, or evaluation failures.
+func (e *Evaluator) Evaluate(expr string, args map[string]interface{}) (bool, error) {
+	// Build a per-call environment with variable declarations inferred
+	// from the args map so expressions can reference them by name.
+	opts := []cel.EnvOption{
+		ext.Strings(),
+		ext.Lists(),
+		ext.Math(),
+	}
+	for name, val := range args {
+		opts = append(opts, cel.Variable(name, celTypeOf(val)))
+	}
+
+	env, err := cel.NewEnv(opts...)
+	if err != nil {
+		return false, fmt.Errorf("cel: create env: %w", err)
+	}
+
+	ast, iss := env.Compile(expr)
+	if iss.Err() != nil {
+		return false, fmt.Errorf("cel: compile: %w", iss.Err())
+	}
+
+	prg, err := env.Program(ast)
+	if err != nil {
+		return false, fmt.Errorf("cel: program: %w", err)
+	}
+
+	// Store the compiled program on the struct.
+	e.prg = prg
+
+	out, _, err := prg.Eval(args)
+	if err != nil {
+		return false, fmt.Errorf("cel: eval: %w", err)
+	}
+
+	result, ok := out.Value().(bool)
+	if !ok {
+		return false, fmt.Errorf("cel: expected bool result, got %T", out.Value())
+	}
+
+	return result, nil
+}
+
 // Evaluate compiles and evaluates a CEL expression against the provided
 // context variables. Variables in vars are auto-declared in the CEL
 // environment based on their Go types, so expressions can reference them
