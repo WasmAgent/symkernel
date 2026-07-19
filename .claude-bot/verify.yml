@@ -1,4 +1,8 @@
 commands:
+  - name: schema-drift
+    cmd: "tmpdir=\"$(mktemp -d)\"; git clone --quiet --filter=blob:none --no-checkout https://github.com/WasmAgent/wasmagent-js.git \"$tmpdir/wasmagent-js\"; git -C \"$tmpdir/wasmagent-js\" checkout --quiet 51a0b036efeb9189123aa46d358a5ed18ea7824c -- packages/compliance/schemas; cmp -s schemas/constraint-ir.schema.json \"$tmpdir/wasmagent-js/packages/compliance/schemas/constraint-ir.schema.json\" && cmp -s schemas/constraint-violation.schema.json \"$tmpdir/wasmagent-js/packages/compliance/schemas/constraint-violation.schema.json\""
+    timeout: 3m
+    level: 1
   - name: build
     cmd: go build ./...
     timeout: 3m
