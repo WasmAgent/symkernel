@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-19 21:24 UTC by patrol_
+_Last updated: 2026-07-19 21:51 UTC by patrol_
 
 ## Queue
 
@@ -8,18 +8,18 @@ _Last updated: 2026-07-19 21:24 UTC by patrol_
 |---|---|
 | Pending | 1 |
 | Active (running/reviewing) | 1 |
-| Blocked | 4 |
-| Completed/Merged (all time) | 38 |
+| Blocked | 5 |
+| Completed/Merged (all time) | 39 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #51 | [milestone Milestone 1] CEL evaluator foundation: interna... | merged/merged | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #44 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/merged | 2026-07-19 |
 | #43 | [milestone Milestone 3 — Core Differentiation] Deploy Z... | merged/merged | 2026-07-19 |
-| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 
 ## Waiting for Human
 
