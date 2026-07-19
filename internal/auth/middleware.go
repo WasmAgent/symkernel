@@ -1,5 +1,7 @@
 package auth
 
+//go:generate bash -c "cd ../.. && make sync-schemas"
+
 import (
 	"net/http"
 	"os"
