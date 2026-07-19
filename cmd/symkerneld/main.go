@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/WasmAgent/symkernel/internal/auth"
+	cellib "github.com/WasmAgent/symkernel/internal/cel"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	"github.com/WasmAgent/symkernel/internal/verify"
 )
@@ -27,6 +28,7 @@ func main() {
 	defer func() { _ = shutdown(ctx) }()
 
 	mux := http.NewServeMux()
+	mux.Handle("POST /v1/verify/cel", cellib.Handler())
 	mux.Handle("POST /v1/verify/z3", verify.Handler(&verify.Z3Solver{}))
 
 	// Middleware chain: otel (outer) → auth (inner) → mux.
