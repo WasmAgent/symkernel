@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-19 17:49 UTC by patrol_
+_Last updated: 2026-07-19 18:34 UTC by patrol_
 
 ## Queue
 
@@ -8,22 +8,24 @@ _Last updated: 2026-07-19 17:49 UTC by patrol_
 |---|---|
 | Pending | 5 |
 | Active (running/reviewing) | 1 |
-| Blocked | 7 |
-| Completed/Merged (all time) | 21 |
+| Blocked | 4 |
+| Completed/Merged (all time) | 24 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #24 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-19 |
+| #35 | Fix WasmAgent/symkernel#28 ([milestone Milestone 4 ] `sch... | merged/merged | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
-| #1 | [milestone Milestone 1 ] `cmd/symkerneld` — HTTP server... | merged/auto_closed_resolved | 2026-07-19 |
-| #22 | [milestone Milestone 3 — Core Differentiation] `interna... | completed/complexity_gate_split | 2026-07-19 |
-| #19 | [milestone Milestone 2 — Core Differentiation] `interna... | merged/merged | 2026-07-19 |
+| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 
 ## Waiting for Human
 
 - #31: [milestone Milestone 4 ] `internal/criterion` — Go-side `Criterion` and `ConstraintIR` types generated ...
+- #27: [milestone Milestone 3 — Core Differentiation] Load test: measure Cloudflare Containers cold-start and p99 latency under 10 con...
+- #6: [milestone Milestone 1 ] `POST /v1/verify/criterion` — wasmagent-js Criterion adapter: `{\
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
