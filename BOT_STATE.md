@@ -1,25 +1,25 @@
 # Bot State
 
-_Last updated: 2026-07-19 11:23 UTC by patrol_
+_Last updated: 2026-07-19 11:43 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 2 |
+| Pending | 5 |
 | Active (running/reviewing) | 1 |
-| Blocked | 9 |
-| Completed/Merged (all time) | 7 |
+| Blocked | 5 |
+| Completed/Merged (all time) | 11 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #15 | [milestone Milestone 1 ] `deploy/docker-compose.yml` — ... | merged/auto_closed_resolved | 2026-07-19 |
+| #8 | [milestone Milestone 1 ] `api/openapi.yaml` — OpenAPI 3... | merged/auto_closed_resolved | 2026-07-19 |
+| #7 | Fix WasmAgent/symkernel#5 ([milestone Milestone 1 ] `POST... | merged/auto_closed_resolved | 2026-07-19 |
+| #18 | [milestone Milestone 2 — Core Differentiation] `interna... | merged/merged | 2026-07-19 |
 | #14 | [milestone Milestone 1 ] `deploy/wrangler.toml` — Cloud... | merged/auto_closed_resolved | 2026-07-19 |
-| #10 | [milestone Milestone 1 ] `deploy/Dockerfile` — multi-st... | merged/auto_closed_resolved | 2026-07-19 |
-| #2 | [milestone Milestone 1 ] `internal/cel` — cel-go expres... | merged/auto_closed_resolved | 2026-07-19 |
-| #9 | [milestone Milestone 1 ] `schemas/` — sync script `make... | merged/merged | 2026-07-19 |
-| #3 | [milestone Milestone 1 ] `internal/auth` — Bearer token... | merged/merged | 2026-07-19 |
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
