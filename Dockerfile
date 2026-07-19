@@ -34,9 +34,14 @@ RUN go build -trimpath -ldflags="-s -w" -o /symkerneld ./cmd/symkerneld
 # does not ship a dynamic linker.
 FROM debian:bookworm-slim AS final
 
-# Runtime-only Z3 package (no headers).
+# Runtime Z3: the libz3 shared library AND the z3 CLI binary. The binary
+# is required because internal/verify/z3.go invokes Z3 via
+# exec.Command("z3", "-in"). On Cloudflare Containers the image runs alone
+# (there is no docker-compose sidecar to provide the z3 binary via a shared
+# volume, as deploy/docker-compose.yml does for local dev), so the binary
+# must be baked into the image for POST /v1/verify/z3 to function.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libz3 && \
+    apt-get install -y --no-install-recommends libz3 z3 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /symkerneld /usr/local/bin/symkerneld

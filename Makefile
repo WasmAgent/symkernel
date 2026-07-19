@@ -10,7 +10,7 @@ SCHEMA_FILES := constraint-ir.schema.json constraint-violation.schema.json
 # provides headers and the linker stub; at runtime libz3.so must be
 # present (or rpath / LD_LIBRARY_PATH must point to it).
 #
-# Inside Docker (deploy/Dockerfile): CGO_ENABLED=1 and libz3-dev
+# Inside Docker (the repo-root Dockerfile): CGO_ENABLED=1 and libz3-dev
 # are set in the builder stage; libz3 runtime is installed in the
 # final stage.
 #
