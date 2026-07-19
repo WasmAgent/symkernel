@@ -53,18 +53,4 @@ Designed for Cloudflare Containers (Phase 0/1) with a migration path to self-hos
 
 `schemas/` holds `constraint-ir.schema.json` and `constraint-violation.schema.json` pinned from `wasmagent-js`. `make sync-schemas` refreshes them; CI fails on drift.
 
-## WasmAgent Ecosystem
-
-| Repository | Role |
-|---|---|
-| [.github](https://github.com/WasmAgent/.github) | Org hub — org portal, roadmap, claims registry, release ledger, project index |
-| [wasmagent-js](https://github.com/WasmAgent/wasmagent-js) | Runtime — embedded agent runtime (WASM kernels, MCP gateway, AEP emitter, capability manifests; A2A/AG-UI/Claude Agent SDK adapters) |
-| wasmagent-py | Runtime (planned) — Python agent runtime; shares AEP schema, Criterion/ConstraintIR, symkernel adapter |
-| [wasmagent-proxy](https://github.com/WasmAgent/wasmagent-proxy) | Gateway 🚧 — Proxy-Wasm evidence engine for Envoy/Istio/Kong; Ed25519-signed AEP records |
-| **[symkernel](https://github.com/WasmAgent/symkernel)** | **Verification 🚧 — this repo** |
-| [bscode](https://github.com/WasmAgent/bscode) | Workload — coding-agent workload on Cloudflare Workers; AEP evidence, deny capabilities, RolloutProvenance |
-| [fresharena](https://github.com/WasmAgent/fresharena) | Evaluation — dynamic adversarial evaluation protocol; FAEP schema, submit-then-test, Public Immunity Pool |
-| [trace-pipeline](https://github.com/WasmAgent/trace-pipeline) | Evidence pipeline — trace-to-training backend; AgentTrustScore, training-data admission gate |
-| [wasmagent-train-replay](https://github.com/WasmAgent/wasmagent-train-replay) | Evidence pipeline 🚧 — causal evidence for distributed GPU training; cross-rank PROV-DM graph, signed EpochEvidenceBundles |
-| [agent-trust-infra](https://github.com/WasmAgent/agent-trust-infra) | Trust artifacts — AgentBOM, MCP Posture, Trust Passport spec + CLI; EU AI Act Annex IV mapping |
-| [open-agent-audit](https://github.com/WasmAgent/open-agent-audit) | Audit — enterprise audit product with AEP v0.3 adapter; deployed at trustavo.com |
+Part of the [WasmAgent](https://github.com/WasmAgent) ecosystem.
