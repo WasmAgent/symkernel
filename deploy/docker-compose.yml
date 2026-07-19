@@ -13,10 +13,10 @@
 #     named volume so that exec.Command("z3", "-in") in
 #     internal/verify/z3.go works without code changes.
 #
-# Alternative considered: building Z3 from source in
-# deploy/Dockerfile's builder stage.  Rejected because it adds
-# compilation overhead, increases image size, and couples Z3
-# versioning to the Go build pipeline.
+# Alternative considered: building Z3 from source in the Dockerfile's
+# builder stage.  Rejected because it adds compilation overhead,
+# increases image size, and couples Z3 versioning to the Go build
+# pipeline.
 
 services:
   # Z3 SMT solver — provides the z3 binary via a shared volume.
@@ -37,7 +37,7 @@ services:
   symkerneld:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: symkerneld
     ports:
       - "${SYMKERNEL_PORT:-8080}:8080"

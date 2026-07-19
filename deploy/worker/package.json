@@ -1,0 +1,17 @@
+{
+  "name": "symkernel-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that routes requests to the symkerneld Container (POST /v1/verify/z3).",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "wrangler deploy -c ../wrangler.toml"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "latest"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}

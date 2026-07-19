@@ -1,0 +1,46 @@
+# ============================================================
+# symkernel — Cloudflare Containers deployment
+# ============================================================
+# The public endpoint is THIS Worker. Cloudflare assigns a
+# *.workers.dev URL on first deploy (Worker name `symkernel`
+# below); set bench/k6's SYMKERNEL_BASE_URL to it.
+#
+# `image` points at the repo-root Dockerfile (../Dockerfile,
+# relative to this config). On `wrangler deploy` wrangler builds
+# the image with Docker (context = repo root, so the Dockerfile's
+# `COPY go.mod` / `COPY . .` resolve) and pushes it to Cloudflare's
+# registry automatically — no account ID is hard-coded here. The
+# single Container instance runs symkerneld and serves
+# POST /v1/verify/z3. See deploy/worker/index.js for the routing
+# code and bench/load-test-infra.md for the full deploy runbook.
+#
+# Prerequisite: Docker must be running locally for the image build.
+# ============================================================
+
+name = "symkernel"
+main = "worker/index.js"
+compatibility_date = "2026-07-20"
+
+[observability]
+enabled = true
+
+[[containers]]
+class_name = "SymkernelContainer"
+image = "../Dockerfile"
+# Phase 0 sizing (docs/15-milestones.md M1/M3): a single standard-1
+# instance (1/2 vCPU, 4 GiB RAM, 8 GB disk) serves the 10-concurrent
+# load test. max_instances = 1 keeps routing on one instance so p99 and
+# cold-start are measured against a single deployment unit; bump both if
+# the M3 decision gate (p99 > 2s or cold-start > 5s) trips.
+instance_type = "standard-1"
+max_instances = 1
+
+[[durable_objects.bindings]]
+# Binding name per docs/15-milestones.md M1. The Worker accesses the
+# container via env.SYMKERNEL (see deploy/worker/index.js).
+name = "SYMKERNEL"
+class_name = "SymkernelContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SymkernelContainer"]
