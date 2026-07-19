@@ -197,6 +197,112 @@ func TestEvaluate_StringSize(t *testing.T) {
 	}
 }
 
+// --- Evaluator struct tests ---
+
+func TestNewEvaluator_Success(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+	if ev == nil {
+		t.Fatal("NewEvaluator() returned nil evaluator")
+	}
+	if ev.env == nil {
+		t.Error("NewEvaluator().env is nil")
+	}
+}
+
+func TestEvaluator_Evaluate_BoolResult(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	args := map[string]interface{}{"score": 85}
+	result, err := ev.Evaluate("score > 50", args)
+	if err != nil {
+		t.Fatalf("Evaluate() error = %v", err)
+	}
+	if result != true {
+		t.Errorf("Evaluate() = %v, want true", result)
+	}
+	if ev.prg == nil {
+		t.Error("Evaluate() did not store program on struct")
+	}
+}
+
+func TestEvaluator_Evaluate_BoolResultFalse(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	args := map[string]interface{}{"score": 30}
+	result, err := ev.Evaluate("score > 50", args)
+	if err != nil {
+		t.Fatalf("Evaluate() error = %v", err)
+	}
+	if result != false {
+		t.Errorf("Evaluate() = %v, want false", result)
+	}
+}
+
+func TestEvaluator_Evaluate_ComplexBoolExpr(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	args := map[string]interface{}{
+		"a": true,
+		"b": false,
+	}
+	result, err := ev.Evaluate("a && !b", args)
+	if err != nil {
+		t.Fatalf("Evaluate() error = %v", err)
+	}
+	if result != true {
+		t.Errorf("Evaluate() = %v, want true", result)
+	}
+}
+
+func TestEvaluator_Evaluate_InvalidSyntax(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	_, err = ev.Evaluate("!!!invalid", nil)
+	if err == nil {
+		t.Fatal("Evaluate() expected error for invalid syntax, got nil")
+	}
+}
+
+func TestEvaluator_Evaluate_NonBoolResult(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	// Expression returns a string, not a bool.
+	_, err = ev.Evaluate(`"hello" + " world"`, nil)
+	if err == nil {
+		t.Fatal("Evaluate() expected error for non-bool result, got nil")
+	}
+}
+
+func TestEvaluator_Evaluate_UndefinedVariable(t *testing.T) {
+	ev, err := NewEvaluator()
+	if err != nil {
+		t.Fatalf("NewEvaluator() error = %v", err)
+	}
+
+	_, err = ev.Evaluate("undefined_var > 1", nil)
+	if err == nil {
+		t.Fatal("Evaluate() expected error for undefined variable, got nil")
+	}
+}
+
 // --- HTTP handler tests for POST /v1/verify/cel ---
 
 func TestHandler_ValidExpr(t *testing.T) {
