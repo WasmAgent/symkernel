@@ -56,3 +56,29 @@ func TestHandlerRejectsInvalidCriterion(t *testing.T) {
 		t.Fatalf("hint = %q, want category validation message", got.Hint)
 	}
 }
+
+func TestHandlerRejectsInvalidRepairMaxRounds(t *testing.T) {
+	body := `{"criterion":{"id":"bad-repair","description":"bad repair","verify_method":"cel_expr","level":"hard","priority":1,"category":"format","repair":{"strategy":"patch","max_rounds":0}}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/criterion", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var got VerifyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.OK {
+		t.Fatal("ok = true, want false")
+	}
+	if got.CriterionID != "bad-repair" {
+		t.Fatalf("criterionId = %q", got.CriterionID)
+	}
+	if !strings.Contains(got.Hint, "criterion.repair.max_rounds") {
+		t.Fatalf("hint = %q, want repair max_rounds validation message", got.Hint)
+	}
+}

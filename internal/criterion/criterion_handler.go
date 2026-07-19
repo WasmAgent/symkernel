@@ -88,7 +88,7 @@ func Validate(c Criterion) error {
 				RepairStrategyFull,
 			), ", "))
 		}
-		if c.Repair.MaxRounds < 0 {
+		if c.Repair.MaxRounds < 1 {
 			return errors.New("criterion.repair.max_rounds must be at least 1 when set")
 		}
 	}
