@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-20 01:59 UTC by patrol_
+_Last updated: 2026-07-20 02:36 UTC by patrol_
 
 ## Queue
 
@@ -9,16 +9,16 @@ _Last updated: 2026-07-20 01:59 UTC by patrol_
 | Pending | 1 |
 | Active (running/reviewing) | 0 |
 | Blocked | 2 |
-| Completed/Merged (all time) | 47 |
+| Completed/Merged (all time) | 49 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #61 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
+| #56 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #55 | [milestone Milestone 1] Create internal/criterion package... | merged/merged | 2026-07-19 |
-| #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
-| #54 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 
 ## Waiting for Human
