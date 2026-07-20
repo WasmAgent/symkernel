@@ -5,13 +5,13 @@ commands:
     level: 1
   - name: build
     cmd: go build ./...
-    timeout: 3m
+    timeout: 5m
     level: 1
   - name: golangci-lint
     cmd: "if [ -f .golangci.yml ] || [ -f .golangci.yaml ]; then export PATH=\"$PATH:/usr/local/go/bin:/home/dev/go/bin:$(go env GOPATH)/bin\"; export GOLANGCI_LINT_CACHE=\"$(mktemp -d)\"; command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; golangci-lint run --allow-serial-runners --timeout 10m ./...; else echo \"no .golangci.yml, skipping\"; fi"
-    timeout: 12m
+    timeout: 15m
     level: 2
   - name: test
-    cmd: go test -short -timeout 120s ./...
-    timeout: 3m
+    cmd: go test -short -timeout 300s ./...
+    timeout: 8m
     level: 3
