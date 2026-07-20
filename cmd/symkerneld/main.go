@@ -15,6 +15,7 @@ import (
 	"github.com/WasmAgent/symkernel/internal/audit"
 	"github.com/WasmAgent/symkernel/internal/cache"
 	cellib "github.com/WasmAgent/symkernel/internal/cel"
+	"github.com/WasmAgent/symkernel/internal/diagnostics"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
 	"github.com/WasmAgent/symkernel/internal/verify"
@@ -42,6 +43,9 @@ func main() {
 
 	cacheStore := cache.New()
 	cacheStore.RegisterRoutes(mux)
+
+	diagStore := diagnostics.New()
+	diagStore.RegisterRoutes(mux)
 
 	// Middleware chain: otel (outer) → auth (inner) → mux.
 	var handler http.Handler = mux
