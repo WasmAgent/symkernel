@@ -62,3 +62,19 @@ language-agnostic and non-invasive to existing runtimes.
   - Go-side prototype landed in `internal/policy/policyrule.go`: `PolicyRule` with an OPTIONAL `EvaluateAsync` hook (nil = defer, preserving the pre-overload contract), `InvocationDecision`/`Vetting` mirrors of the wasmagent-js types, a `Registry` dispatcher (first-non-deferring-wins), and `Registry.Prefetch` modelling the pre-fetch vs. inline-async pattern.
   - `BenchmarkInlineVsPrefetch` in `internal/policy/policyrule_test.go` measures the latency advantage of overlapping the rule evaluation with the tool body (prefetch ≈ `max(rule, tool)` vs. inline `rule + tool`).
   - Upstream draft-PR submission to `WasmAgent/wasmagent-js` remains a cross-repo follow-up (see `cross_repo_notes` on the closing issue); the in-repo prototype is the evaluation deliverable.
+
+## Milestone 5 — Distributed Orchestration & Policy Intelligence (Phase 2)
+
+> Multi-tier coordination and observability: symkernel becomes a intelligent verification orchestrator, not just isolated endpoints.
+> Goal: enable automatic tier selection, enterprise-grade auditability, and verification efficiency at scale.
+
+- [ ] `internal/orchestrator` — verification routing engine: `Route(query VerificationRequest) (*TierSelection, error)` analyzing query complexity, cost targets, and accuracy requirements to automatically choose CEL vs wazero vs Z3 tier; expose routing metrics via `GET /v1/orchestration/stats`
+- [ ] `internal/cache` — multi-tier caching with smart invalidation: LRU cache for CEL expressions keyed by `(expr_hash, context_hash)` with TTL-based expiry and tag-based invalidation when upstream schemas drift; expose `POST /v1/admin/cache/invalidate` for ops control
+- [ ] `POST /v1/verify/orchestrated` — unified verification endpoint: `{"query":{"type":"auto","expr":"...","context":{...},"options":{"maxCostMs":500,"minConfidence":0.95}}}` → routes to optimal tier automatically with `{"result":{"tier":"cel","value":...},"routing":{"selectionReason":"expr_complexity_low","alternatives":["wazero"]}}`
+- [ ] `internal/audit` — enterprise-grade audit trail: immutable append-only log of all verification decisions with `decision_id`, input hash, tier selected, result, and timestamp; implement log rotation and retention policies; export via `GET /v1/audit/export?format=jsonl&from=<timestamp>`
+- [ ] `internal/diagnostics` — verification explainability: for failed verifications, generate structured explanations (`WhyFailed{"constraint":"max_memory","actual":256,"limit":128,"remediation":"reduce_allocation_or_increase_limit"}`); expose via `GET /v1/diagnostics/<decision_id>`
+- [ ] `internal/batch` — bulk verification API: `POST /v1/verify/batch` accepting up to 1000 verification requests in a single payload; process in parallel with worker pool; return aggregated results with per-item status and batch-level timing statistics
+- [ ] `deploy/helm/` — Kubernetes deployment charts: Helm templates for production deployment with HPA (horizontal pod autoscaling), resource limits, pod disruption budgets, and ConfigMap/Secret management for multi-environment configs
+- [ ] `internal/metrics` — enhanced Prometheus metrics: expose tier selection counts, cache hit/miss ratios, per-endpoint latency histograms, and verification outcome counts; documented in `metrics/README.md` with Grafana dashboard queries
+
+This milestone transforms symkernel from isolated verification endpoints into an intelligent, production-grade orchestration layer that automatically optimizes for cost, accuracy, and operational scale—addressing the natural next question after "can we verify?" which is "how do we verify efficiently and reliably at scale?"
