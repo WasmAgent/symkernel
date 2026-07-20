@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-20 15:01 UTC by patrol_
+_Last updated: 2026-07-20 16:57 UTC by patrol_
 
 ## Queue
 
@@ -9,17 +9,17 @@ _Last updated: 2026-07-20 15:01 UTC by patrol_
 | Pending | 0 |
 | Active (running/reviewing) | 0 |
 | Blocked | 0 |
-| Completed/Merged (all time) | 58 |
+| Completed/Merged (all time) | 67 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
-| #70 | [milestone Milestone 3 — Core Differentiation] `interna... | completed/complexity_gate_split | 2026-07-20 |
-| #71 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
-| #17 | [milestone Milestone 1 ] README — 5-minute quickstart: ... | completed/issue_closed_upstream | 2026-07-20 |
-| #68 | [milestone Milestone 3 — Core Differentiation] `interna... | completed/complexity_gate_split | 2026-07-20 |
-| #69 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
+| #84 | Fix WasmAgent/symkernel#80 (Fix WasmAgent/symkernel#77 ([... | merged/merged | 2026-07-20 |
+| #82 | Fix WasmAgent/symkernel#74 ([milestone Milestone 5 ] `int... | merged/merged | 2026-07-20 |
+| #81 | Fix WasmAgent/symkernel#76 ([milestone Milestone 5 ] `int... | merged/merged | 2026-07-20 |
+| #80 | Fix WasmAgent/symkernel#77 ([milestone Milestone 5 ] `int... | completed/complexity_gate_split | 2026-07-20 |
+| #73 | [milestone Milestone 5 ] `internal/orchestrator` — veri... | merged/merged | 2026-07-20 |
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
