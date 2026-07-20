@@ -38,7 +38,7 @@ FROM debian:bookworm-slim AS final
 # is required because internal/verify/z3.go invokes Z3 via
 # exec.Command("z3", "-in"). On Cloudflare Containers the image runs alone
 # (there is no docker-compose sidecar to provide the z3 binary via a shared
-# volume, as deploy/docker-compose.yml does for local dev), so the binary
+# volume, as docker-compose.yml does for local dev), so the binary
 # must be baked into the image for POST /v1/verify/z3 to function.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libz3 z3 && \

@@ -36,7 +36,7 @@ services:
 
   symkerneld:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     container_name: symkerneld
     ports:
