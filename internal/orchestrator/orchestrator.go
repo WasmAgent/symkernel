@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/WasmAgent/symkernel/internal/criterion"
 	"github.com/WasmAgent/symkernel/internal/otel"
 )
 
@@ -73,8 +74,20 @@ type VerificationRequest struct {
 	MethodHint string `json:"method_hint"`
 }
 
+// TierAlternative describes a tier that was considered but not selected,
+// along with the reason it was not chosen.
+type TierAlternative struct {
+	// Tier is the verification backend that was not selected.
+	Tier Tier `json:"tier"`
+
+	// Reason is a human-readable explanation of why this tier was not
+	// chosen.
+	Reason string `json:"reason"`
+}
+
 // TierSelection is the output of the Route function, containing the chosen
-// verification tier and the rationale for the decision.
+// verification tier, the rationale, and the alternatives that were
+// considered but not selected.
 type TierSelection struct {
 	// Tier is the selected verification backend.
 	Tier Tier `json:"tier"`
@@ -85,6 +98,10 @@ type TierSelection struct {
 	// EstimatedCostMs is the router's estimated latency for the selected
 	// tier based on the query complexity.
 	EstimatedCostMs int `json:"estimated_cost_ms"`
+
+	// Alternatives lists tiers that were considered but not selected, along
+	// with the reason each was not chosen.
+	Alternatives []TierAlternative `json:"alternatives,omitempty"`
 }
 
 // tierConfig holds per-tier routing thresholds and estimated costs.
@@ -159,10 +176,9 @@ func NewRouter() *Router {
 	return r
 }
 
-// Route analyzes the given VerificationRequest and returns the optimal
-// TierSelection. It records routing metrics on the Router for later
-// retrieval via Stats.
-func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
+// selectTier contains the core routing logic without metrics recording or
+// alternatives computation. It is unexported; use Route instead.
+func (r *Router) selectTier(query VerificationRequest) (*TierSelection, error) {
 	// Validate input.
 	accuracy := query.AccuracyRequired
 	if accuracy == 0 {
@@ -180,7 +196,6 @@ func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
 		}
 		tc := configForTier(t)
 		if query.CostTargetMs == 0 || tc.baseCostMs <= query.CostTargetMs {
-			r.recordRoute(t, tc.baseCostMs)
 			return &TierSelection{
 				Tier:            t,
 				Reason:          fmt.Sprintf("method_hint=%q honoured (base cost %dms within budget)", query.MethodHint, tc.baseCostMs),
@@ -215,7 +230,6 @@ func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
 		if fits {
 			reason := fmt.Sprintf("auto-selected %s: constraint_count=%d, nesting_depth=%d, quantifiers=%v, accuracy=%d",
 				tc.label, cx.ConstraintCount, cx.MaxNestingDepth, cx.HasQuantifiers, accuracy)
-			r.recordRoute(tc.tier, tc.baseCostMs)
 			return &TierSelection{
 				Tier:            tc.tier,
 				Reason:          reason,
@@ -226,7 +240,6 @@ func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
 
 	// Fallback: Z3 always qualifies (unlimited thresholds, accuracy=100).
 	tc := configForTier(TierZ3)
-	r.recordRoute(tc.tier, tc.baseCostMs)
 	return &TierSelection{
 		Tier:            TierZ3,
 		Reason:          "fallback to Z3 (no other tier fits constraints and budget)",
@@ -234,11 +247,65 @@ func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
 	}, nil
 }
 
+// Route analyzes the given VerificationRequest and returns the optimal
+// TierSelection with alternatives. It records routing metrics on the
+// Router for later retrieval via Stats.
+func (r *Router) Route(query VerificationRequest) (*TierSelection, error) {
+	sel, err := r.selectTier(query)
+	if err != nil {
+		return nil, err
+	}
+	r.recordRoute(sel.Tier, sel.EstimatedCostMs)
+	sel.Alternatives = r.computeAlternatives(query, sel.Tier)
+	return sel, nil
+}
+
 // recordRoute increments routing metrics for the given tier.
 func (r *Router) recordRoute(t Tier, costMs int) {
 	atomic.AddUint64(r.routeCounts[t], 1)
 	atomic.AddUint64(r.routeLatencyMs[t], uint64(costMs))
 	atomic.AddUint64(r.routeSamples[t], 1)
+}
+
+// computeAlternatives returns the list of tiers that were considered but
+// not selected, with human-readable reasons for each.
+func (r *Router) computeAlternatives(query VerificationRequest, selected Tier) []TierAlternative {
+	accuracy := query.AccuracyRequired
+	if accuracy == 0 {
+		accuracy = 80
+	}
+	cx := query.Complexity
+	var alts []TierAlternative
+
+	for _, tc := range tierConfigs {
+		if tc.tier == selected {
+			continue
+		}
+		var reasons []string
+		if accuracy > tc.accuracyCeiling {
+			reasons = append(reasons, fmt.Sprintf("accuracy requirement %d exceeds ceiling %d", accuracy, tc.accuracyCeiling))
+		}
+		if query.CostTargetMs > 0 && tc.baseCostMs > query.CostTargetMs {
+			reasons = append(reasons, fmt.Sprintf("base cost %dms exceeds budget %dms", tc.baseCostMs, query.CostTargetMs))
+		}
+		if cx.ConstraintCount > 0 && cx.ConstraintCount > tc.maxConstraintCount {
+			reasons = append(reasons, fmt.Sprintf("constraint count %d exceeds max %d", cx.ConstraintCount, tc.maxConstraintCount))
+		}
+		if cx.MaxNestingDepth > 0 && cx.MaxNestingDepth > tc.maxNestingDepth {
+			reasons = append(reasons, fmt.Sprintf("nesting depth %d exceeds max %d", cx.MaxNestingDepth, tc.maxNestingDepth))
+		}
+		if cx.HasQuantifiers && tc.tier == TierCEL {
+			reasons = append(reasons, "cannot handle quantifiers (forall/exists)")
+		}
+		if len(reasons) == 0 {
+			reasons = append(reasons, "lower priority than selected tier")
+		}
+		alts = append(alts, TierAlternative{
+			Tier:   tc.tier,
+			Reason: strings.Join(reasons, "; "),
+		})
+	}
+	return alts
 }
 
 // Stats returns a snapshot of routing metrics. It is safe to call from
@@ -343,14 +410,80 @@ func (r *Router) StatsHandler() http.HandlerFunc {
 	}
 }
 
+// --- Orchestrated verification endpoint ---
+
+// orchestratedRequest wraps the JSON request body for POST
+// /v1/verify/orchestrated. It extends the routing query with an optional
+// criterion constraint for downstream verification integration.
+type orchestratedRequest struct {
+	Query     VerificationRequest     `json:"query"`
+	Criterion *criterion.ConstraintIR `json:"criterion,omitempty"`
+}
+
+// orchestratedResponse wraps the OPA-envelope response body for orchestrated
+// verification requests.
+type orchestratedResponse struct {
+	Result     *orchestratedResult `json:"result"`
+	DecisionID string              `json:"decision_id"`
+}
+
+// orchestratedResult is the routing result for an orchestrated verification,
+// containing the tier selection with alternatives and an optional criterion
+// reference for downstream verification.
+type orchestratedResult struct {
+	TierSelection `json:",inline"`
+
+	// CriterionID echoes the criterion ID when a constraint was supplied in
+	// the request, enabling downstream verification pipelines to correlate
+	// the routing decision with the original constraint.
+	CriterionID string `json:"criterion_id,omitempty"`
+}
+
+// OrchestratedVerifyHandler returns an http.HandlerFunc for the POST
+// /v1/verify/orchestrated endpoint. It accepts a verification query with an
+// optional criterion constraint, routes it to the optimal tier, and returns
+// the selection with alternatives.
+func (r *Router) OrchestratedVerifyHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		var body orchestratedRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			http.Error(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		sel, err := r.Route(body.Query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		result := &orchestratedResult{
+			TierSelection: *sel,
+		}
+		if body.Criterion != nil {
+			result.CriterionID = body.Criterion.ID
+		}
+
+		resp := orchestratedResponse{
+			Result:     result,
+			DecisionID: otel.DecisionIDFromContext(req.Context()),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp) //nolint:errcheck // partial write to ResponseWriter is unrecoverable
+	}
+}
+
 // RegisterRoutes registers the orchestrator endpoints on the given ServeMux.
 // It mounts:
 //
-//	POST /v1/orchestration/route  — verification routing
-//	GET  /v1/orchestration/stats — routing metrics
+//	POST /v1/orchestration/route    — verification routing
+//	GET  /v1/orchestration/stats    — routing metrics
+//	POST /v1/verify/orchestrated    — orchestrated verification with alternatives
 func (r *Router) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /v1/orchestration/route", r.RouteHandler())
 	mux.Handle("GET /v1/orchestration/stats", r.StatsHandler())
+	mux.Handle("POST /v1/verify/orchestrated", r.OrchestratedVerifyHandler())
 }
 
 // ParseTier parses a tier string into a Tier value. Returns an error for

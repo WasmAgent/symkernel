@@ -27,6 +27,59 @@ func TestRoute_DefaultsToCEL(t *testing.T) {
 	}
 }
 
+func TestRoute_DefaultsToCEL_HasAlternatives(t *testing.T) {
+	r := NewRouter()
+	sel, err := r.Route(VerificationRequest{})
+	if err != nil {
+		t.Fatalf("Route() error = %v", err)
+	}
+	if sel.Tier != TierCEL {
+		t.Fatalf("Tier = %q, want %q", sel.Tier, TierCEL)
+	}
+	// Should have 2 alternatives (wazero and z3).
+	if len(sel.Alternatives) != 2 {
+		t.Fatalf("len(Alternatives) = %d, want 2", len(sel.Alternatives))
+	}
+	tierSet := map[Tier]bool{sel.Tier: true}
+	for _, alt := range sel.Alternatives {
+		if tierSet[alt.Tier] {
+			t.Errorf("duplicate tier %q in alternatives", alt.Tier)
+		}
+		tierSet[alt.Tier] = true
+		if alt.Reason == "" {
+			t.Errorf("alternative for tier %q has empty reason", alt.Tier)
+		}
+	}
+	if !tierSet[TierCEL] || !tierSet[TierWazero] || !tierSet[TierZ3] {
+		t.Errorf("alternatives missing tiers, got %v", tierSet)
+	}
+}
+
+func TestRoute_Z3Selection_HasAlternatives(t *testing.T) {
+	r := NewRouter()
+	sel, err := r.Route(VerificationRequest{
+		Complexity: Complexity{
+			ConstraintCount: 500,
+			MaxNestingDepth: 20,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Route() error = %v", err)
+	}
+	if sel.Tier != TierZ3 {
+		t.Fatalf("Tier = %q, want %q", sel.Tier, TierZ3)
+	}
+	if len(sel.Alternatives) != 2 {
+		t.Fatalf("len(Alternatives) = %d, want 2", len(sel.Alternatives))
+	}
+	// Both alternatives should have reasons.
+	for _, alt := range sel.Alternatives {
+		if alt.Reason == "" {
+			t.Errorf("alternative for tier %q has empty reason", alt.Tier)
+		}
+	}
+}
+
 func TestRoute_SimpleConstraints_SelectsCEL(t *testing.T) {
 	r := NewRouter()
 	sel, err := r.Route(VerificationRequest{
@@ -377,6 +430,149 @@ func TestRegisterRoutes(t *testing.T) {
 			t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 		}
 	})
+
+	t.Run("POST /v1/verify/orchestrated", func(t *testing.T) {
+		body := `{"query":{}}`
+		req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var resp orchestratedResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if resp.Result == nil {
+			t.Fatal("result is nil")
+		}
+		if resp.Result.Tier != TierCEL {
+			t.Errorf("tier = %q, want %q", resp.Result.Tier, TierCEL)
+		}
+		if len(resp.Result.Alternatives) == 0 {
+			t.Error("alternatives is empty, want non-empty")
+		}
+	})
+}
+
+// --- Orchestrated verify handler tests ---
+
+func TestOrchestratedVerifyHandler_SimpleQuery(t *testing.T) {
+	r := NewRouter()
+	handler := r.OrchestratedVerifyHandler()
+
+	body := `{"query":{"complexity":{"constraint_count":5,"max_nesting_depth":2}}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp orchestratedResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Result == nil {
+		t.Fatal("result is nil")
+	}
+	if resp.Result.Tier != TierCEL {
+		t.Errorf("tier = %q, want %q", resp.Result.Tier, TierCEL)
+	}
+	if resp.Result.CriterionID != "" {
+		t.Errorf("criterion_id = %q, want empty (no criterion provided)", resp.Result.CriterionID)
+	}
+	if len(resp.Result.Alternatives) == 0 {
+		t.Error("alternatives is empty, want non-empty")
+	}
+}
+
+func TestOrchestratedVerifyHandler_WithCriterion(t *testing.T) {
+	r := NewRouter()
+	handler := r.OrchestratedVerifyHandler()
+
+	body := `{"query":{},"criterion":{"id":"fmt-001","description":"must use 2-space indent","verify_method":"cel_expr","arg":null,"level":"hard","priority":80,"category":"format"}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp orchestratedResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Result == nil {
+		t.Fatal("result is nil")
+	}
+	if resp.Result.CriterionID != "fmt-001" {
+		t.Errorf("criterion_id = %q, want %q", resp.Result.CriterionID, "fmt-001")
+	}
+}
+
+func TestOrchestratedVerifyHandler_InvalidJSON(t *testing.T) {
+	r := NewRouter()
+	handler := r.OrchestratedVerifyHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader("not json"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestOrchestratedVerifyHandler_BadAccuracy(t *testing.T) {
+	r := NewRouter()
+	handler := r.OrchestratedVerifyHandler()
+
+	body := `{"query":{"accuracy_required":200}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestOrchestratedVerifyHandler_ComplexityRoutesToZ3(t *testing.T) {
+	r := NewRouter()
+	handler := r.OrchestratedVerifyHandler()
+
+	body := `{"query":{"complexity":{"constraint_count":500,"max_nesting_depth":20}}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/orchestrated", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp orchestratedResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Result.Tier != TierZ3 {
+		t.Errorf("tier = %q, want %q for high complexity", resp.Result.Tier, TierZ3)
+	}
+	if len(resp.Result.Alternatives) == 0 {
+		t.Error("alternatives is empty for Z3 selection, want non-empty")
+	}
 }
 
 // --- Utility tests ---
