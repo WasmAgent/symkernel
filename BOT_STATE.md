@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-20 09:59 UTC by patrol_
+_Last updated: 2026-07-20 10:14 UTC by patrol_
 
 ## Queue
 
@@ -9,17 +9,17 @@ _Last updated: 2026-07-20 09:59 UTC by patrol_
 | Pending | 1 |
 | Active (running/reviewing) | 0 |
 | Blocked | 0 |
-| Completed/Merged (all time) | 52 |
+| Completed/Merged (all time) | 53 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #65 | Fix WasmAgent/symkernel#64 ([Milestone 1] Docker setup: C... | merged/merged | 2026-07-20 |
 | #64 | [Milestone 1] Docker setup: Create Dockerfile and docker-... | completed/complexity_gate_split | 2026-07-20 |
 | #63 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
 | #62 | [milestone Milestone 3 — Core Differentiation] `interna... | completed/complexity_gate_split | 2026-07-20 |
 | #61 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
-| #56 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-20 |
 
 ## Waiting for Human
 
