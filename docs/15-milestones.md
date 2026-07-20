@@ -78,3 +78,17 @@ language-agnostic and non-invasive to existing runtimes.
 - [ ] `internal/metrics` — enhanced Prometheus metrics: expose tier selection counts, cache hit/miss ratios, per-endpoint latency histograms, and verification outcome counts; documented in `metrics/README.md` with Grafana dashboard queries
 
 This milestone transforms symkernel from isolated verification endpoints into an intelligent, production-grade orchestration layer that automatically optimizes for cost, accuracy, and operational scale—addressing the natural next question after "can we verify?" which is "how do we verify efficiently and reliably at scale?"
+
+## Milestone 6 — Policy Composition & Developer Experience (Phase 2)
+
+> **From verification primitive to verification platform:** Enable sophisticated multi-tier policies and frictionless local development.
+
+- [ ] `internal/compose` — Policy composition engine: evaluate `CEL → wazero → Z3` tier chains with configurable fallback (`any_pass`, `all_pass`, `short_circuit`) and timeout budgets per tier; expose `POST /v1/verify/composed` endpoint accepting `{"tiers":[{"type":"cel","expr":"..."},{"type":"wazero","module":"..."}],"mode":"any_pass"}`
+- [ ] `internal/cache` — Multi-layer caching: L1 in-process LRU for hot CEL expressions (configurable TTL via `SYMKERNEL_CACHE_TTL_SEC`), L2 Redis-backed optional cache for cross-instance wazero compilation results; cache key = `SHA256(expr + context schema)`; invalidate on schema version bump
+- [ ] `internal/explain` — Verification trace explainer: attach structured trace to every response showing which tier fired, why subsequent tiers skipped (or executed), and intermediate values; return in `trace` field aligning with OpenTelemetry decision spans; enable `?explain=true` query param
+- [ ] `cmd/symk` — CLI tool for local development: `symk verify cel --expr "input.age > 18" --context ctx.json` runs offline using embedded CEL evaluator; `symk test-policy --dir policies/` batches `.yaml` policy files against fixture contexts; `symk doctor` validates connectivity and auth against remote `symkerneld`
+- [ ] `policies/` — Policy definition framework (optional library): YAML DSL for composed policies with metadata, tiers, and test fixtures; `symk validate-policy` checks schema compliance; generates OpenAPI snippets for each policy
+- [ ] `internal/batch` — Batch verification endpoint: `POST /v1/verify/batch` accepting `{"items":[{"expr":"...","context":{...}}...]}` → `{"results":[...],"totalMs":12}` with parallel execution (configurable concurrency limit `SYMKERNEL_BATCH_CONCURRENCY`); returns partial results on timeout with `timeout: true` flag
+- [ ] `api/openapi.yaml` — Extended spec: add `/v1/verify/composed`, `/v1/verify/batch`, and `trace` response field definitions; include example policy composition YAMLs and batch request patterns
+- [ ] `bench/` — Composition tier benchmarks: compare end-to-end latency for single-tier CEL vs. three-tier chains under cache cold/warm conditions; measure fallback behavior impact on tail latency (p95, p99); output trace examples for each path
+- [ ] README — Add "Composed Policies" section: walkthrough of `any_pass` vs. `all_pass` modes, trace interpretation, and quickstart for `symk` CLI; include batch verification example for bulk validation workflows
