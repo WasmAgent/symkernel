@@ -21,7 +21,7 @@ language-agnostic and non-invasive to existing runtimes.
 - [ ] `schemas/` — sync script `make sync-schemas` that pulls `constraint-ir.schema.json` and `constraint-violation.schema.json` from `wasmagent-js/packages/compliance/schemas` at a pinned commit; CI step fails if local copy drifts
 - [ ] `deploy/Dockerfile` — multi-stage build: `golang:1.22-bookworm` builder → `gcr.io/distroless/static` final image; static binary, no CGO in Phase 0
 - [ ] `deploy/wrangler.toml` — Cloudflare Containers deployment config: container binding name `SYMKERNEL`, memory/vCPU sizing for Phase 0 load
-- [ ] `deploy/docker-compose.yml` — local dev environment: single `symkerneld` service with env vars; `docker compose up` is the quickstart
+- [ ] `docker-compose.yml` — local dev environment: single `symkerneld` service with env vars; `docker compose up` is the quickstart
 - [ ] `bench/` — comparison harness: run the 6 `policy-compliance` tasks from `bscode/fixtures/bench-v0/tasks/` against both the existing keyword+n-gram path and the new `cel_expr` path; output a markdown table of accuracy/false-positive rates
 - [ ] README — 5-minute quickstart: `docker run`, example `curl` request against each endpoint, output expected
 
@@ -48,7 +48,7 @@ language-agnostic and non-invasive to existing runtimes.
 - [ ] `POST /v1/verify/z3` — OPA-envelope endpoint: `{"input":{"constraints_smt2":"...","timeout_ms":2000}}` → `{"result":{"sat":"sat","model":{...}},"decision_id":"uuid"}`; test cases: trivially sat, trivially unsat, timeout-induced unknown
 - [ ] `internal/repair` — generate-error-fix loop: `Repair(program string, trapResult SandboxResult) (RepairPrompt, error)` assembles a structured prompt from trap details for LLM-driven fix; does NOT call LLM itself (caller injects); covered by unit test with a mock trap
 - [ ] `deploy/Dockerfile` — update to include Z3 shared library (`libz3.so`) in final image; document CGO linker flags in Makefile
-- [ ] `deploy/docker-compose.yml` — add `z3` service or build Z3 from source in builder stage; document which approach is chosen and why
+- [ ] `docker-compose.yml` — add `z3` service or build Z3 from source in builder stage; document which approach is chosen and why
 - [ ] Load test: measure Cloudflare Containers cold-start and p99 latency under 10 concurrent Z3 requests; record results in `bench/z3-load-test.md`; decision gate: if p99 > 2s or scale-to-zero cold start > 5s, document migration path to self-hosted VPS
 
 ---

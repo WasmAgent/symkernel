@@ -34,7 +34,7 @@ apply the M3 decision gate.
 
 ### Local (docker-compose)
 - **URL:** `http://localhost:${SYMKERNEL_PORT:-8080}/v1/verify/z3`
-- Start: `docker compose -f deploy/docker-compose.yml up`
+- Start: `docker compose up`
 - **Auth:** `Authorization: Bearer <SYMKERNEL_CLIENT_TOKEN>` (set on the
   `symkerneld` service; the middleware rejects all requests if unset).
 
