@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/WasmAgent/symkernel/internal/auth"
+	"github.com/WasmAgent/symkernel/internal/audit"
 	cellib "github.com/WasmAgent/symkernel/internal/cel"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
@@ -34,6 +35,9 @@ func main() {
 
 	orch := orchestrator.NewRouter()
 	orch.RegisterRoutes(mux)
+
+	auditLog := audit.New()
+	auditLog.RegisterRoutes(mux)
 
 	// Middleware chain: otel (outer) → auth (inner) → mux.
 	var handler http.Handler = mux
