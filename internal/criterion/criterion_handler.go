@@ -1,0 +1,164 @@
+// Package criterion defines Go types generated from the wasmagent-js
+// compliance JSON Schemas and provides an HTTP handler for the
+// POST /v1/verify/criterion endpoint.
+package criterion
+
+//go:generate go run generate.go
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+)
+
+// VerifyRequest is the JSON body of a POST /v1/verify/criterion call.
+type VerifyRequest struct {
+	Criterion Criterion `json:"criterion"`
+}
+
+// VerifyResponse is the JSON body returned by POST /v1/verify/criterion.
+type VerifyResponse struct {
+	OK          bool   `json:"ok"`
+	CriterionID string `json:"criterionId"`
+	Hint        string `json:"hint,omitempty"`
+}
+
+// Handler returns an http.Handler that validates a Criterion against the
+// schema-derived type constraints. It accepts POST only and rejects unknown
+// JSON fields and trailing content.
+func Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req VerifyRequest
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, VerifyResponse{
+				Hint: "invalid criterion request: " + err.Error(),
+			})
+			return
+		}
+
+		// Reject trailing JSON after the first object.
+		var extra any
+		if err := dec.Decode(&extra); err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, VerifyResponse{
+				CriterionID: req.Criterion.ID,
+				Hint:        "invalid criterion request: trailing JSON",
+			})
+			return
+		}
+
+		if err := Validate(req.Criterion); err != nil {
+			writeJSON(w, http.StatusOK, VerifyResponse{
+				OK:          false,
+				CriterionID: req.Criterion.ID,
+				Hint:        err.Error(),
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, VerifyResponse{OK: true, CriterionID: req.Criterion.ID})
+	})
+}
+
+// Validate checks that a Criterion satisfies all schema-level constraints
+// that Go struct tags alone cannot enforce (enum membership, minimum
+// values, etc.).
+func Validate(c Criterion) error {
+	if strings.TrimSpace(c.ID) == "" {
+		return errors.New("criterion.id is required")
+	}
+	if strings.TrimSpace(c.Description) == "" {
+		return errors.New("criterion.description is required")
+	}
+	if strings.TrimSpace(c.VerifyMethod) == "" {
+		return errors.New("criterion.verify_method is required")
+	}
+	if !validLevel(c.Level) {
+		return fmt.Errorf("criterion.level must be one of: %s",
+			strings.Join(enumValues(
+				ConstraintLevelHard, ConstraintLevelSoft,
+			), ", "))
+	}
+	if !validCategory(c.Category) {
+		return fmt.Errorf("criterion.category must be one of: %s",
+			strings.Join(enumValues(
+				ConstraintCategoryFormat,
+				ConstraintCategoryContent,
+				ConstraintCategoryStyle,
+				ConstraintCategoryTool,
+				ConstraintCategoryState,
+				ConstraintCategorySecurity,
+				ConstraintCategorySemantic,
+			), ", "))
+	}
+	if c.Repair != nil {
+		if !validRepairStrategy(c.Repair.Strategy) {
+			return fmt.Errorf("criterion.repair.strategy must be one of: %s",
+				strings.Join(enumValues(
+					RepairStrategyPatch,
+					RepairStrategyInsertSection,
+					RepairStrategyRegenerateRegion,
+					RepairStrategyFull,
+				), ", "))
+		}
+		if c.Repair.MaxRounds < 1 {
+			return errors.New("criterion.repair.max_rounds must be at least 1 when set")
+		}
+	}
+	return nil
+}
+
+func validLevel(level ConstraintLevel) bool {
+	return level == ConstraintLevelHard || level == ConstraintLevelSoft
+}
+
+func validCategory(category ConstraintCategory) bool {
+	switch category {
+	case ConstraintCategoryFormat,
+		ConstraintCategoryContent,
+		ConstraintCategoryStyle,
+		ConstraintCategoryTool,
+		ConstraintCategoryState,
+		ConstraintCategorySecurity,
+		ConstraintCategorySemantic:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRepairStrategy(strategy RepairStrategy) bool {
+	switch strategy {
+	case RepairStrategyPatch,
+		RepairStrategyInsertSection,
+		RepairStrategyRegenerateRegion,
+		RepairStrategyFull:
+		return true
+	default:
+		return false
+	}
+}
+
+func enumValues[T ~string](values ...T) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		out = append(out, string(v))
+	}
+	return out
+}
+
+func writeJSON(w http.ResponseWriter, status int, resp VerifyResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(resp)
+}

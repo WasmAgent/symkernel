@@ -57,7 +57,7 @@ language-agnostic and non-invasive to existing runtimes.
 
 - [ ] `schemas/` — `make sync-schemas` integrated into CI via `go generate ./...`; PR fails if schema drift detected; tested with an intentional drift scenario
 - [ ] wasmagent-js adapter PR — `CelGoVerifier` implementation: `methods: ["cel_expr"]`, `verify()` calls `POST /v1/verify/criterion`; submitted as standalone PR to `WasmAgent/wasmagent-js` (or own fork first); does NOT touch `packages/core`
-- [ ] `internal/criterion` — Go-side `Criterion` and `ConstraintIR` types generated from `schemas/*.schema.json` via `go generate`; used by `/v1/verify/criterion` handler; no hand-maintained type duplication
+- [x] `internal/criterion` — Go-side `Criterion` and `ConstraintIR` types generated from `schemas/*.schema.json` via `go generate`; used by `/v1/verify/criterion` handler; no hand-maintained type duplication
 - [x] Evaluate `PolicyRule.evaluateAsync` upstream PR to `WasmAgent/wasmagent-js`: prototype a backwards-compatible `evaluateAsync?: (toolName, args, vetting) => Promise<InvocationDecision|undefined>` overload; submit as draft PR with benchmarks showing latency impact of pre-fetch vs. inline async
   - Go-side prototype landed in `internal/policy/policyrule.go`: `PolicyRule` with an OPTIONAL `EvaluateAsync` hook (nil = defer, preserving the pre-overload contract), `InvocationDecision`/`Vetting` mirrors of the wasmagent-js types, a `Registry` dispatcher (first-non-deferring-wins), and `Registry.Prefetch` modelling the pre-fetch vs. inline-async pattern.
   - `BenchmarkInlineVsPrefetch` in `internal/policy/policyrule_test.go` measures the latency advantage of overlapping the rule evaluation with the tool body (prefetch ≈ `max(rule, tool)` vs. inline `rule + tool`).
