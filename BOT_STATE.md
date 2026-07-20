@@ -1,12 +1,12 @@
 # Bot State
 
-_Last updated: 2026-07-20 07:47 UTC by patrol_
+_Last updated: 2026-07-20 08:24 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 3 |
+| Pending | 2 |
 | Active (running/reviewing) | 0 |
 | Blocked | 0 |
 | Completed/Merged (all time) | 49 |
@@ -20,10 +20,6 @@ _Last updated: 2026-07-20 07:47 UTC by patrol_
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
 | #55 | [milestone Milestone 1] Create internal/criterion package... | merged/merged | 2026-07-19 |
 | #31 | [milestone Milestone 4 ] `internal/criterion` — Go-side... | completed/maintenance_done | 2026-07-19 |
-
-## Waiting for Human
-
-- #6: [milestone Milestone 1 ] `POST /v1/verify/criterion` — wasmagent-js Criterion adapter: `{\
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
