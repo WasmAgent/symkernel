@@ -106,6 +106,36 @@ var k6CompositionBenchmarks = []struct {
 	},
 }
 
+// TestLatencySLOHarnessExists verifies that the SLO benchmark harness file
+// exists under bench/ and contains the expected structural patterns
+// (percentile computation, baseline persistence, tier configurations,
+// regression checking). This pins the acceptance criteria for issue #140.
+func TestLatencySLOHarnessExists(t *testing.T) {
+	root := repoRoot(t)
+	path := filepath.Join(root, "bench", "latency_slos_test.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	content := string(data)
+	patterns := []string{
+		"computePercentiles",
+		"baselineStore",
+		"regressionThreshold",
+		"celTierConfig",
+		"wazeroTierConfig",
+		"z3TierConfig",
+		"TestLatencySLOs",
+		"runSLOBenchmark",
+		"checkRegression",
+	}
+	for _, pat := range patterns {
+		if !strings.Contains(content, pat) {
+			t.Errorf("latency_slos_test.go is missing expected pattern %q", pat)
+		}
+	}
+}
+
 // TestCompositionBenchmarksExist verifies that the three Milestone 6 k6
 // composition-tier benchmark scripts exist under bench/k6/ and contain the
 // expected structural patterns (scenarios, metrics, endpoints, trace output).
