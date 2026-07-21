@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-21 20:01 UTC by patrol_
+_Last updated: 2026-07-21 20:08 UTC by patrol_
 
 ## Queue
 
@@ -9,17 +9,17 @@ _Last updated: 2026-07-21 20:01 UTC by patrol_
 | Pending | 3 |
 | Active (running/reviewing) | 1 |
 | Blocked | 1 |
-| Completed/Merged (all time) | 105 |
+| Completed/Merged (all time) | 106 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #143 | strict-gate: `staticcheck-all` failing in WasmAgent/symke... | merged/merged | 2026-07-21 |
 | #142 | [milestone Milestone 3 — Core Differentiation] `interna... | completed/complexity_gate_split | 2026-07-21 |
 | #141 | [milestone Milestone 8 ] README production — operationa... | merged/merged | 2026-07-21 |
 | #139 | [milestone Milestone 8 ] `deploy/terraform/` — infrastr... | completed/complexity_gate_split | 2026-07-21 |
 | #131 | [milestone Milestone 8 ] `internal/ratelimit` — token-b... | completed/complexity_gate_split | 2026-07-21 |
-| #137 | Fix WasmAgent/symkernel#134 ([milestone Milestone 8 ] `in... | completed/complexity_gate_split | 2026-07-21 |
 
 ## Waiting for Human
 
