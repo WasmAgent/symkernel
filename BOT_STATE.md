@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-21 02:21 UTC by patrol_
+_Last updated: 2026-07-21 02:38 UTC by patrol_
 
 ## Queue
 
@@ -23,6 +23,7 @@ _Last updated: 2026-07-21 02:21 UTC by patrol_
 
 ## Waiting for Human
 
+- #113: [milestone Milestone 6 ] `api/openapi.yaml` — Extended spec: add `/v1/verify/composed`, `/v1/verify/bat...
 - #101: [milestone Milestone 6 ] `policies/` — Policy definition framework (optional library): YAML DSL for com...
 
 ---
