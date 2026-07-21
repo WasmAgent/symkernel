@@ -16,6 +16,6 @@ commands:
     timeout: 8m
     level: 3
   - name: staticcheck-all
-    cmd: "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/go/bin:/home/dev/go/bin; staticcheck -checks all ./..."
+    cmd: "export GOCACHE=\"$(mktemp -d)\"; export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/go/bin:/home/dev/go/bin; staticcheck -checks all ./..."
     timeout: 5m
     level: 4

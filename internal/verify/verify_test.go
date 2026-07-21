@@ -300,6 +300,12 @@ func TestVerifyYAML_StaticcheckAllEntry(t *testing.T) {
 			if !strings.Contains(c.Cmd, "staticcheck -checks all") {
 				t.Errorf("staticcheck-all cmd = %q, want to contain 'staticcheck -checks all'", c.Cmd)
 			}
+			if !strings.Contains(c.Cmd, `export GOCACHE="$(mktemp -d)"`) {
+				t.Errorf("staticcheck-all cmd = %q, want isolated GOCACHE from mktemp", c.Cmd)
+			}
+			if strings.Contains(c.Cmd, "/tmp/qbot-gocache") {
+				t.Errorf("staticcheck-all cmd = %q, must not use shared qbot Go cache", c.Cmd)
+			}
 			if strings.Contains(c.Cmd, "head -") {
 				t.Errorf("staticcheck-all cmd = %q, must not truncate output with 'head'", c.Cmd)
 			}
