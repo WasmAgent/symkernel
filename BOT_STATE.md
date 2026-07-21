@@ -1,13 +1,13 @@
 # Bot State
 
-_Last updated: 2026-07-21 02:40 UTC by patrol_
+_Last updated: 2026-07-21 02:51 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 3 |
-| Active (running/reviewing) | 0 |
+| Pending | 2 |
+| Active (running/reviewing) | 1 |
 | Blocked | 0 |
 | Completed/Merged (all time) | 87 |
 
@@ -24,7 +24,6 @@ _Last updated: 2026-07-21 02:40 UTC by patrol_
 ## Waiting for Human
 
 - #113: [milestone Milestone 6 ] `api/openapi.yaml` — Extended spec: add `/v1/verify/composed`, `/v1/verify/bat...
-- #101: [milestone Milestone 6 ] `policies/` — Policy definition framework (optional library): YAML DSL for com...
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
