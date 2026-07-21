@@ -1,3 +1,4 @@
+// Package auth provides HTTP middleware for authentication and authorization.
 package auth
 
 //go:generate bash -c "cd ../.. && make sync-schemas"
