@@ -18,6 +18,7 @@ import (
 	"github.com/WasmAgent/symkernel/internal/diagnostics"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
+	"github.com/WasmAgent/symkernel/internal/router"
 	"github.com/WasmAgent/symkernel/internal/verify"
 )
 
@@ -46,6 +47,10 @@ func main() {
 
 	diagStore := diagnostics.New()
 	diagStore.RegisterRoutes(mux)
+
+	queryRouter := router.New()
+	queryRouter.RegisterHandler(router.TierCEL, cellib.Handler())
+	queryRouter.RegisterRoutes(mux)
 
 	// Middleware chain: otel (outer) → auth (inner) → mux.
 	var handler http.Handler = mux
