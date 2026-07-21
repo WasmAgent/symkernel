@@ -15,6 +15,7 @@ require (
 
 require (
 	cel.dev/expr v0.25.1 // indirect
+	github.com/aclements/go-z3 v0.0.0-20220809013456-4675d5f90ca5 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
