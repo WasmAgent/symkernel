@@ -92,3 +92,18 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `api/openapi.yaml` — Extended spec: add `/v1/verify/composed`, `/v1/verify/batch`, and `trace` response field definitions; include example policy composition YAMLs and batch request patterns
 - [ ] `bench/` — Composition tier benchmarks: compare end-to-end latency for single-tier CEL vs. three-tier chains under cache cold/warm conditions; measure fallback behavior impact on tail latency (p95, p99); output trace examples for each path
 - [ ] README — Add "Composed Policies" section: walkthrough of `any_pass` vs. `all_pass` modes, trace interpretation, and quickstart for `symk` CLI; include batch verification example for bulk validation workflows
+
+## Milestone 7 — Distributed Execution & Performance Optimization (Phase 3)
+
+> Production-scale capabilities: turn a single-instance service into a horizontally-scalable platform with intelligent caching and query optimization.
+
+- [ ] `internal/cache` — multi-tier caching layer: in-memory LRU for hot CEL expressions (1min TTL) with optional Redis backend for cross-instance cache invalidation; cache key includes expr hash + context schema fingerprint
+- [ ] `internal/router` — query classification router: classify incoming requests by complexity (simple CEL vs. WASM vs. Z3) and route to specialized worker pools; add `POST /v1/verify` automatic endpoint selection
+- [ ] `internal/optimizer` — CEL expression optimizer: constant folding, dead branch elimination, and common subexpression elimination using cel-go's AST inspection; benchmark 15-30% latency reduction on typical policy workloads
+- [ ] `deploy/helm/` — Kubernetes Helm chart: horizontal pod autoscaling based on CPU/memory custom metrics, rolling deployment config, and pod disruption budgets
+- [ ] `POST /v1/batch` — bulk verification endpoint: accept up to 100 Criterion/ConstraintIR requests in a single JSON array; return aggregated results with per-item status; reduce round-trip overhead for batch workloads
+- [ ] `internal/queue` — async work queue for long-running Z3 proofs: enqueue requests >5s timeout, return `decision_id` immediately, add `GET /v1/results/:decision_id` polling endpoint; integrate with Cloudflare Queues or RabbitMQ
+- [ ] `internal/metrics` — Prometheus metrics exposition: `/metrics` endpoint with counter/histogram for request latency by tier, cache hit/miss rates, and queue depth; include Grafana dashboard JSON
+- [ ] Chaos testing harness: `test/chaos/` package with simulated instance failures during batch operations; verify graceful degradation and cache consistency; add to CI pipeline
+
+---
