@@ -179,6 +179,19 @@ make wasm && make test     # build + test
 
 Designed for Cloudflare Containers (Phase 0/1) with a migration path to self-hosted VPS if Z3 p99 latency exceeds threshold.
 
+## Operational Runbook
+
+Production operations documentation for running and maintaining symkerneld.
+
+| Guide | Contents |
+|---|---|
+| [Deployment Checklist](docs/deployment-checklist.md) | Pre-flight checks, build steps, container build, Cloudflare deploy, schema drift, post-deploy verification, rollback |
+| [Environment Variables](docs/environment-vars.md) | `SYMKERNEL_ADDR`, `SYMKERNEL_CLIENT_TOKEN`, `CGO_ENABLED`, and planned M8 variables |
+| [Health Checks](docs/health-checks.md) | Current operational endpoints (audit stats, cache stats, orchestrator stats) and planned `/healthz` hierarchy |
+| [Circuit Breaker Recovery](docs/circuit-breaker-recovery.md) | Current Z3 timeout behaviour, manual mitigation steps, planned M8 circuit breaker states |
+| [Decision Log Analysis](docs/decision-log-analysis.md) | Audit log schema, export API, `jq` one-liners for pass/fail rates, tier distribution, duplicate detection |
+| [Capacity Planning](docs/capacity-planning.md) | Resource consumption per tier, memory/CPU sizing, vertical vs horizontal scaling, cache tuning, SLO targets |
+
 ## Schema alignment
 
 `schemas/` holds `constraint-ir.schema.json` and `constraint-violation.schema.json` pinned from `wasmagent-js`. `make sync-schemas` refreshes them; CI fails on drift.
