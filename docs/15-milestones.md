@@ -123,3 +123,20 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `deploy/terraform/` — infrastructure as code for cloud deployment: Terraform modules for Cloudflare Containers (existing), GKE + CloudSQL (optional Redis), and AWS EKS + ElastiCache; outputs include service endpoint and monitoring dashboard URLs
 - [ ] `bench/latency-slos` — SLO benchmark harness: measure p50/p95/p99 latency across 10k requests at 10/100/1000 QPS; validate targets: p50 < 20ms (CEL), p95 < 100ms (wazero), p99 < 500ms (Z3); fail CI if regressions > 15% above baseline
 - [ ] README production — operational runbook: deployment checklist, environment variable reference, health check interpretation, circuit breaker recovery procedures, decision log analysis (sample `jq` one-liners), and capacity planning guidelines
+
+## Milestone 9 — Multi-Tenant Isolation & Performance Caching
+
+> Enterprise readiness: transform from single-service to multi-organization platform.
+> Goal: enable secure multi-tenancy with per-tenant resource isolation and intelligent result caching for production scale.
+
+- [ ] `internal/tenant` — Tenant resolver middleware: extract tenant ID from JWT `sub` claim or `X-Tenant-ID` header; validate against `SYMKERNEL_ALLOWED_TENANTS` env var (comma-separated allowlist); propagate `tenant_id` through span attributes and response metadata
+- [ ] `internal/cache` — Redis-backed result cache: `CacheKey(expr, context_hash, tenant_id)` with TTL from `SYMKERNEL_CACHE_TTL`; cache hits return immediately with `cached: true` flag; warm-up script `make warm-cache` for frequently-used CEL expressions from `bench/` fixtures
+- [ ] `POST /v1/verify/cel` enhancement — add `?no-cache=true` query param to bypass cache for critical decisions; return `X-Cache-Status: hit/miss/bypass` response header
+- [ ] `internal/quota` — Per-tenant rate limiting: `SYMKERNEL_TENANT_QUOTA_DEFAULT` and `SYMKERNEL_TENANT_QUOTA_OVERRIDES` (JSON map of tenant_id → requests_per_second); return 429 with `X-RateLimit-Tenant` and `Retry-After` headers
+- [ ] `internal/isolation` — Tenant-scoped wazero sandboxes: separate memory limits per tenant via `SYMKERNEL_TENANT_MEMORY_LIMITS` JSON config; sandbox isolation prevents cross-tenant memory leaks; telemetry logs per-tenant memory usage
+- [ ] `POST /v1/tenant/usage` — Usage analytics endpoint: `{"tenant_id":"...","from":"2026-07-01","to":"2026-07-22"}` → `{"totalRequests":1234,"cacheHitRate":0.42,"avgLatencyMs":45,"quotaExceeded":true}`; requires admin token (`SYMKERNEL_ADMIN_TOKEN`)
+- [ ] `internal/metrics` — Per-tenant Prometheus metrics: `symkernel_requests_total{tenant_id, endpoint, status}`, `symkernel_cache_hits_total{tenant_id}`, `symkernel_quota_exceeded_total{tenant_id}`; scrape endpoint at `GET /metrics`
+- [ ] `deploy/tenant-config.yaml` — Example tenant configuration manifest showing env var setup for 3-tenant deployment (org-a, org-b, org-c) with different quotas and memory limits; documented in README `## Multi-Tenancy` section
+- [ ] `bench/multi-tenant` — Load testing harness: ` artillery run tenant-load-test.yml` simulates 5 concurrent tenants with different request patterns; validates cache isolation, quota enforcement, and sandbox memory limits
+- [ ] `api/openapi.yaml` updates — Add tenant headers, cache headers, rate limit error codes (429), and `/v1/tenant/usage` endpoint with admin security scheme
+- [ ] `docs/multi-tenant-deployment.md` — Deployment guide for Cloudflare Containers with per-tenant service instances or isolated environments; covers Redis configuration (Upstash), quota tuning, and monitoring dashboards
