@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-21 05:07 UTC by patrol_
+_Last updated: 2026-07-21 06:06 UTC by patrol_
 
 ## Queue
 
@@ -8,18 +8,18 @@ _Last updated: 2026-07-21 05:07 UTC by patrol_
 |---|---|
 | Pending | 0 |
 | Active (running/reviewing) | 0 |
-| Blocked | 5 |
-| Completed/Merged (all time) | 87 |
+| Blocked | 1 |
+| Completed/Merged (all time) | 93 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
-| #112 | [milestone Milestone 6 ] `internal/batch` — Batch verif... | completed/complexity_gate_split | 2026-07-21 |
-| #114 | [milestone Milestone 6 ] `bench/` — Composition tier be... | merged/merged | 2026-07-21 |
-| #115 | [milestone Milestone 6 ] README — Add "Composed Policie... | merged/merged | 2026-07-21 |
-| #104 | [milestone Milestone 5] Core policy storage and schema fo... | merged/auto_closed_resolved | 2026-07-21 |
-| #116 | [milestone Milestone 6] Define policy YAML schema and add... | completed/complexity_gate_split | 2026-07-21 |
+| #123 | [milestone Milestone 7 ] `internal/optimizer` — CEL exp... | completed/complexity_gate_split | 2026-07-21 |
+| #126 | Fix WasmAgent/symkernel#125 ([milestone Milestone 7 ] `in... | completed/complexity_gate_split | 2026-07-21 |
+| #121 | [milestone Milestone 7 ] `internal/cache` — multi-tier ... | completed/complexity_gate_split | 2026-07-21 |
+| #122 | [milestone Milestone 7 ] `internal/router` — query clas... | completed/complexity_gate_split | 2026-07-21 |
+| #124 | [milestone Milestone 7 ] `internal/queue` — async work ... | completed/complexity_gate_split | 2026-07-21 |
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
