@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // mockSolver is a test stub that returns predetermined results.
@@ -259,5 +262,54 @@ func TestParseModel(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// verifyCommand is the YAML structure for .claude-bot/verify.yml entries.
+type verifyCommand struct {
+	Name    string `yaml:"name"`
+	Cmd     string `yaml:"cmd"`
+	Timeout string `yaml:"timeout"`
+	Level   int    `yaml:"level"`
+}
+
+// verifyConfig is the top-level YAML structure for .claude-bot/verify.yml.
+type verifyConfig struct {
+	Commands []verifyCommand `yaml:"commands"`
+}
+
+func TestVerifyYAML_StaticcheckAllEntry(t *testing.T) {
+	path := "../../.claude-bot/verify.yml"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	var cfg verifyConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	var found bool
+	for _, c := range cfg.Commands {
+		if c.Name == "staticcheck-all" {
+			found = true
+			if c.Level != 4 {
+				t.Errorf("staticcheck-all level = %d, want 4", c.Level)
+			}
+			if !strings.Contains(c.Cmd, "staticcheck -checks all") {
+				t.Errorf("staticcheck-all cmd = %q, want to contain 'staticcheck -checks all'", c.Cmd)
+			}
+			if strings.Contains(c.Cmd, "head -") {
+				t.Errorf("staticcheck-all cmd = %q, must not truncate output with 'head'", c.Cmd)
+			}
+			if c.Timeout == "" {
+				t.Error("staticcheck-all timeout is empty, want a non-empty timeout")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("staticcheck-all command not found in verify.yml")
 	}
 }
