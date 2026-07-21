@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-21 06:28 UTC by patrol_
+_Last updated: 2026-07-21 06:39 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 0 |
-| Active (running/reviewing) | 1 |
-| Blocked | 0 |
+| Active (running/reviewing) | 0 |
+| Blocked | 1 |
 | Completed/Merged (all time) | 94 |
 
 ## Recent Activity (last 5)
@@ -20,6 +20,10 @@ _Last updated: 2026-07-21 06:28 UTC by patrol_
 | #126 | Fix WasmAgent/symkernel#125 ([milestone Milestone 7 ] `in... | completed/complexity_gate_split | 2026-07-21 |
 | #121 | [milestone Milestone 7 ] `internal/cache` — multi-tier ... | completed/complexity_gate_split | 2026-07-21 |
 | #122 | [milestone Milestone 7 ] `internal/router` — query clas... | completed/complexity_gate_split | 2026-07-21 |
+
+## Waiting for Human
+
+- #127: Fix WasmAgent/symkernel#122 ([milestone Milestone 7 ] `internal/router` — query classification router: classify incomi
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
