@@ -1,25 +1,25 @@
 # Bot State
 
-_Last updated: 2026-07-21 16:30 UTC by patrol_
+_Last updated: 2026-07-21 16:43 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 2 |
-| Active (running/reviewing) | 2 |
-| Blocked | 3 |
-| Completed/Merged (all time) | 102 |
+| Active (running/reviewing) | 1 |
+| Blocked | 4 |
+| Completed/Merged (all time) | 103 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #139 | [milestone Milestone 8 ] `deploy/terraform/` — infrastr... | completed/complexity_gate_split | 2026-07-21 |
 | #131 | [milestone Milestone 8 ] `internal/ratelimit` — token-b... | completed/complexity_gate_split | 2026-07-21 |
 | #137 | Fix WasmAgent/symkernel#134 ([milestone Milestone 8 ] `in... | completed/complexity_gate_split | 2026-07-21 |
 | #136 | Fix WasmAgent/symkernel#132 ([milestone Milestone 8 ] `in... | completed/complexity_gate_split | 2026-07-21 |
 | #134 | [milestone Milestone 8 ] `internal/health` — hierarchic... | completed/complexity_gate_split | 2026-07-21 |
-| #132 | [milestone Milestone 8 ] `internal/batcher` — request b... | completed/complexity_gate_split | 2026-07-21 |
 
 ## Waiting for Human
 
