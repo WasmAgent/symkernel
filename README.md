@@ -1,5 +1,13 @@
 # symkernel
 
+| | |
+|---|---|
+| **Status** | Experimental |
+| **Contract stability** | Unstable |
+| **Recommended for** | WasmAgent-ecosystem CEL/wazero/Z3 verification |
+| **Not recommended for** | Standalone production policy engine |
+
+
 Symbolic verification backend for the WasmAgent ecosystem, written in Go.
 
 Provides a three-tier reasoning service over HTTP, consumed by wasmagent-js, wasmagent-py, and any runtime that speaks the Criterion/ConstraintIR protocol:
