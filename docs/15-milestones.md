@@ -107,3 +107,19 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] Chaos testing harness: `test/chaos/` package with simulated instance failures during batch operations; verify graceful degradation and cache consistency; add to CI pipeline
 
 ---
+
+## Milestone 8 — Production Scale & Reliability (Phase 4)
+
+> Transform from functional prototype to production-grade verification service.
+> Goal: enable horizontal scale, minimize tail latency, and provide enterprise reliability guarantees.
+
+- [ ] `internal/cache` — multi-tier caching layer: in-memory LRU for hot CEL expressions (~10k entries, 5min TTL), Redis-backed optional cache for cross-instance deduplication; cache keys hash expr + context schema; invalidate on type errors
+- [ ] `internal/ratelimit` — token-bucket rate limiter per client token: configurable QPS/burst via `SYMKERNEL_RATE_LIMIT_QPS` and `SYMKERNEL_RATE_LIMIT_BURST`; return `429 Too Many Requests` with `Retry-After` header; pass-through for unauthenticated local dev
+- [ ] `internal/batcher` — request batching for Z3 proofs: accumulate up to 16 satisfiability checks or 50ms window, emit single Z3 `check-sat` batch; reduces per-request overhead by ~8x for high-volume verification pipelines
+- [ ] `deploy/kubernetes/` — production deployment manifests: `Deployment` with HPA (2–20 pods targeting 70% CPU), `PodDisruptionBudget` (min 2 available), `Service` with `loadBalancer` spec, `ConfigMap` for env var injection
+- [ ] `internal/health` — hierarchical health endpoints: `/healthz` (liveness — returns 200 if server responding), `/healthz/ready` (readiness — checks Z3/wazero warmup, cache connectivity), `/healthz/deep` (dependency ping — CelExprParser compile test, wazero.CompileModule, Z3 simple satisfiability)
+- [ ] `internal/tracing` — decision logging: append-only write of `decision_id`, expr, context hash, result, latency to `$SYMKERNEL_DECISION_LOG_PATH` (default `/var/log/symkernel/decisions.jsonl`); optional daily S3 upload via `SYMKERNEL_DECISION_LOG_BUCKET`; rotation at 100MB
+- [ ] `internal/circuitbreaker` — Z3 timeout protection: after 3 consecutive timeouts >30s in 60s window, open circuit for 90s, return fast-fail `503 Service Unavailable` with `{\"error\":\"Z3 circuit open\"}`; half-open state allows single probe request
+- [ ] `deploy/terraform/` — infrastructure as code for cloud deployment: Terraform modules for Cloudflare Containers (existing), GKE + CloudSQL (optional Redis), and AWS EKS + ElastiCache; outputs include service endpoint and monitoring dashboard URLs
+- [ ] `bench/latency-slos` — SLO benchmark harness: measure p50/p95/p99 latency across 10k requests at 10/100/1000 QPS; validate targets: p50 < 20ms (CEL), p95 < 100ms (wazero), p99 < 500ms (Z3); fail CI if regressions > 15% above baseline
+- [ ] README production — operational runbook: deployment checklist, environment variable reference, health check interpretation, circuit breaker recovery procedures, decision log analysis (sample `jq` one-liners), and capacity planning guidelines
