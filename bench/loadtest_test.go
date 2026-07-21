@@ -1,13 +1,19 @@
-// Package bench holds repo-level invariants for the Z3 load-test
+// Package bench holds repo-level invariants for the load-test
 // infrastructure. The Cloudflare Containers deploy (issue #43) requires
 // bench/load-test-infra.md to exist and be non-empty — this is the shell
 // acceptance criterion `test -s bench/load-test-infra.md`; the test below
 // pins it so the invariant cannot silently regress.
+//
+// Milestone 6 adds composition-tier benchmarks (issue #114): three k6 scripts
+// in bench/k6/ that compare single-tier CEL vs. three-tier chains under cache
+// cold/warm conditions, measure fallback impact on tail latency (p95, p99),
+// and emit trace examples for each path.
 package bench
 
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,5 +50,84 @@ func TestLoadTestInfraDocExists(t *testing.T) {
 	}
 	if info.Size() == 0 {
 		t.Fatal("bench/load-test-infra.md is empty (acceptance criterion `test -s` requires non-zero size)")
+	}
+}
+
+// k6CompositionBenchmarks are the three k6 scripts added in Milestone 6
+// (issue #114). Each entry maps the file name to a list of substring patterns
+// that must appear in the file for it to be considered valid.
+var k6CompositionBenchmarks = []struct {
+	file    string
+	patterns []string
+}{
+	{
+		file: "composition-tier-benchmarks.js",
+		patterns: []string{
+			"import http from 'k6/http'",
+			"cel_only",
+			"three_tier_any_pass",
+			"three_tier_all_pass",
+			"three_tier_short_circuit",
+			"v1/verify/composed",
+			"p(95)",
+			"p(99)",
+			"trace",
+		},
+	},
+	{
+		file: "composition-cache-cold-warm.js",
+		patterns: []string{
+			"import http from 'k6/http'",
+			"coldRequest",
+			"warmRequest",
+			"v1/admin/cache/invalidate",
+			"v1/admin/cache/stats",
+			"v1/verify/composed",
+			"cold_cache_duration",
+			"warm_cache_duration",
+			"trace",
+		},
+	},
+	{
+		file: "composition-fallback-tail-latency.js",
+		patterns: []string{
+			"import http from 'k6/http'",
+			"fallbackAnyPass",
+			"fallbackAllPass",
+			"fallbackShortCircuit",
+			"v1/verify/composed",
+			"fallback_any_pass_duration",
+			"fallback_all_pass_duration",
+			"fallback_short_circuit_duration",
+			"p(95)",
+			"p(99)",
+			"trace",
+		},
+	},
+}
+
+// TestCompositionBenchmarksExist verifies that the three Milestone 6 k6
+// composition-tier benchmark scripts exist under bench/k6/ and contain the
+// expected structural patterns (scenarios, metrics, endpoints, trace output).
+// This pins the acceptance criteria from issue #114 so they cannot silently
+// regress.
+func TestCompositionBenchmarksExist(t *testing.T) {
+	root := repoRoot(t)
+	k6Dir := filepath.Join(root, "bench", "k6")
+
+	for _, tc := range k6CompositionBenchmarks {
+		t.Run(tc.file, func(t *testing.T) {
+			path := filepath.Join(k6Dir, tc.file)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s: %v", path, err)
+			}
+			content := string(data)
+			for _, pat := range tc.patterns {
+				if !strings.Contains(content, pat) {
+					t.Errorf("file %s is missing expected pattern %q", tc.file, pat)
+				}
+			}
+		})
 	}
 }
