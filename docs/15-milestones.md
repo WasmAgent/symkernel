@@ -44,7 +44,7 @@ language-agnostic and non-invasive to existing runtimes.
 
 > Second real differentiator: mathematical satisfiability proofs.
 
-- [ ] `internal/smt` — Z3 binding via `go-z3` CGO: `Solve(smt2 string, timeoutMs int) (SMTResult, error)` returning `{Sat: "sat"|"unsat"|"unknown", Model: map[string]any, UnsatCore: []string}`
+- [x] `internal/smt` — Z3 binding via `go-z3` CGO: `Solve(smt2 string, timeoutMs int) (SMTResult, error)` returning `{Sat: "sat"|"unsat"|"unknown", Model: map[string]any, UnsatCore: []string}`
 - [ ] `POST /v1/verify/z3` — OPA-envelope endpoint: `{"input":{"constraints_smt2":"...","timeout_ms":2000}}` → `{"result":{"sat":"sat","model":{...}},"decision_id":"uuid"}`; test cases: trivially sat, trivially unsat, timeout-induced unknown
 - [ ] `internal/repair` — generate-error-fix loop: `Repair(program string, trapResult SandboxResult) (RepairPrompt, error)` assembles a structured prompt from trap details for LLM-driven fix; does NOT call LLM itself (caller injects); covered by unit test with a mock trap
 - [ ] `deploy/Dockerfile` — update to include Z3 shared library (`libz3.so`) in final image; document CGO linker flags in Makefile

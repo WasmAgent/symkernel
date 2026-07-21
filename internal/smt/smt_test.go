@@ -2,6 +2,7 @@ package smt
 
 import (
 	"fmt"
+	"os/exec"
 	"testing"
 )
 
@@ -230,4 +231,52 @@ func TestSolver_Error(t *testing.T) {
 func TestSolver_Interface(t *testing.T) {
 	// Verify Z3Solver satisfies the Solver interface at compile time.
 	var _ Solver = (*Z3Solver)(nil)
+}
+
+// TestZ3Solver_SolveIntegration exercises the real z3 binary end-to-end
+// through the public Solve(smt2, timeoutMs) signature. It is skipped when
+// z3 is not on PATH so the suite stays green in solver-less environments.
+func TestZ3Solver_SolveIntegration(t *testing.T) {
+	if _, err := exec.LookPath("z3"); err != nil {
+		t.Skip("z3 not installed; skipping integration test")
+	}
+
+	solver := &Z3Solver{}
+
+	// Trivially satisfiable: some integer x > 5 exists.
+	satRes, err := solver.Solve("(declare-const x Int)(assert (> x 5))(check-sat)", 5000)
+	if err != nil {
+		t.Fatalf("sat case: unexpected error: %v", err)
+	}
+	if satRes.Sat != "sat" {
+		t.Errorf("sat case: Sat = %q, want %q", satRes.Sat, "sat")
+	}
+
+	// Trivially unsatisfiable: x > 5 and x < 1 cannot both hold.
+	unsatRes, err := solver.Solve("(declare-const x Int)(assert (> x 5))(assert (< x 1))(check-sat)", 5000)
+	if err != nil {
+		t.Fatalf("unsat case: unexpected error: %v", err)
+	}
+	if unsatRes.Sat != "unsat" {
+		t.Errorf("unsat case: Sat = %q, want %q", unsatRes.Sat, "unsat")
+	}
+	if unsatRes.Model != nil {
+		t.Errorf("unsat case: Model = %v, want nil", unsatRes.Model)
+	}
+}
+
+// TestZ3Solver_SolveDefaultTimeout confirms a non-positive timeoutMs falls
+// back to the internal default budget rather than short-circuiting.
+func TestZ3Solver_SolveDefaultTimeout(t *testing.T) {
+	if _, err := exec.LookPath("z3"); err != nil {
+		t.Skip("z3 not installed; skipping integration test")
+	}
+	solver := &Z3Solver{}
+	got, err := solver.Solve("(declare-const x Int)(assert (> x 5))(check-sat)", 0)
+	if err != nil {
+		t.Fatalf("unexpected error with default timeout: %v", err)
+	}
+	if got.Sat != "sat" {
+		t.Errorf("Sat = %q, want %q", got.Sat, "sat")
+	}
 }
