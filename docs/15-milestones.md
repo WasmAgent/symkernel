@@ -140,3 +140,20 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `bench/multi-tenant` — Load testing harness: ` artillery run tenant-load-test.yml` simulates 5 concurrent tenants with different request patterns; validates cache isolation, quota enforcement, and sandbox memory limits
 - [ ] `api/openapi.yaml` updates — Add tenant headers, cache headers, rate limit error codes (429), and `/v1/tenant/usage` endpoint with admin security scheme
 - [ ] `docs/multi-tenant-deployment.md` — Deployment guide for Cloudflare Containers with per-tenant service instances or isolated environments; covers Redis configuration (Upstash), quota tuning, and monitoring dashboards
+
+## Milestone 10 — Distributed Verification & Performance Scaling (Phase 3)
+
+> Transform from single-node verification service to horizontally-scalable distributed verification cluster.
+> Goal: enable enterprise-grade throughput for CI/CD pipelines and real-time policy enforcement scenarios.
+
+- [ ] `internal/distributed/coordination` — Raft-based leader election and work distribution using HashiCorp Memberlist; support 3+ node clusters with automatic failover and split-brain prevention
+- [ ] `internal/distributed/workqueue` — Priority work queue with backpressure, deadline-based starvation prevention, and per-tenant rate limiting; support both batch (CI pipelines) and streaming (real-time enforcement) workloads
+- [ ] `internal/cache/distributed` — Redis-backed verification result cache with TTL-based invalidation, cache warming for common policy patterns, and cache telemetry (hit/miss ratios, eviction rates)
+- [ ] `POST /v1/verify/batch` — Batch verification endpoint: `{"requests":[{"type":"cel","expr":"...","context":{...}},...]}` → `{"results":[...],"summary":{"total":N,"cached":M,"parallel":P}}`; automatic parallelization across available nodes
+- [ ] `internal/distributed/sharding` — Consistent hashing ring for work distribution; support node join/leave with minimal rebalancing; per-shard metrics for load balancing decisions
+- [ ] `internal/profiling/verification` — Detailed performance profiling per verification tier: compilation time, evaluation time, Z3 solver time, wazero compilation overhead; expose via `GET /v1/debug/performance` endpoint
+- [ ] `deploy/cluster` — Kubernetes deployment manifests: StatefulSet for Raft nodes, ConfigMap for cluster config, HorizontalPodAutoscaler with custom metrics (queue depth, cache miss rate), headless service for cluster communication
+- [ ] `internal/health/cluster` — Cluster health endpoint: `GET /v1/health/cluster` → `{"nodes":[{"id":"...","role":"leader","queueDepth":10,"cacheHitRate":0.85}],"cluster":{"healthy":true,"partitioned":false}}`; supports readiness/liveness probes
+- [ ] `internal/analytics` — Verification analytics pipeline: aggregate statistics on policy evaluation patterns, common failure modes, performance trends; export to Prometheus metrics and optional PostgreSQL backend
+- [ ] `internal/distributed/testing` — Cluster testing harness: spin up local 3-node cluster using `docker-compose`, test leader election, partition recovery, and workload distribution under simulated failures
+- [ ] `docs/10-scaling.md` — Scaling guide: capacity planning per tier (CEL: 10K RPS/node, wazero: 1K RPS/node, Z3: 100 RPS/node), multi-region deployment patterns, disaster recovery procedures, and cost optimization strategies
