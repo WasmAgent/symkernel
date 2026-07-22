@@ -1,13 +1,13 @@
 # Bot State
 
-_Last updated: 2026-07-22 03:45 UTC by patrol_
+_Last updated: 2026-07-22 04:13 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 0 |
-| Active (running/reviewing) | 1 |
+| Active (running/reviewing) | 0 |
 | Blocked | 1 |
 | Completed/Merged (all time) | 124 |
 
@@ -20,10 +20,6 @@ _Last updated: 2026-07-22 03:45 UTC by patrol_
 | #164 | [milestone Milestone 9 ] `internal/metrics` — Per-tenan... | completed/complexity_gate_split | 2026-07-22 |
 | #165 | [milestone Milestone 9 ] `deploy/tenant-config.yaml` — ... | completed/complexity_gate_split | 2026-07-22 |
 | #166 | [milestone Milestone 9 ] `bench/multi-tenant` — Load te... | completed/complexity_gate_split | 2026-07-22 |
-
-## Waiting for Human
-
-- #169: Fix WasmAgent/symkernel#165 ([milestone Milestone 9 ] `deploy/tenant-config.yaml` — Example tenant configuration manif
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
