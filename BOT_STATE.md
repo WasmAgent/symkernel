@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-22 14:15 UTC by patrol_
+_Last updated: 2026-07-22 14:24 UTC by patrol_
 
 ## Queue
 
@@ -8,7 +8,7 @@ _Last updated: 2026-07-22 14:15 UTC by patrol_
 |---|---|
 | Pending | 0 |
 | Active (running/reviewing) | 0 |
-| Blocked | 4 |
+| Blocked | 3 |
 | Completed/Merged (all time) | 137 |
 
 ## Recent Activity (last 5)
@@ -23,7 +23,6 @@ _Last updated: 2026-07-22 14:15 UTC by patrol_
 
 ## Waiting for Human
 
-- #184: [milestone Milestone 10] `docs/10-scaling.md` — Scaling guide: capacity planning per tier (CEL: 10K RPS...
 - #176: [milestone Milestone 10] `internal/distributed/sharding` — Consistent hashing ring for work distributio...
 
 ---
