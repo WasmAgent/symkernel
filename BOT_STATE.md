@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-22 01:25 UTC by patrol_
+_Last updated: 2026-07-22 01:59 UTC by patrol_
 
 ## Queue
 
@@ -8,18 +8,18 @@ _Last updated: 2026-07-22 01:25 UTC by patrol_
 |---|---|
 | Pending | 0 |
 | Active (running/reviewing) | 0 |
-| Blocked | 4 |
-| Completed/Merged (all time) | 113 |
+| Blocked | 0 |
+| Completed/Merged (all time) | 119 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
-| #159 | [milestone Milestone 9 ] `internal/isolation` — Tenant-... | completed/complexity_gate_split | 2026-07-22 |
-| #151 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/merged | 2026-07-21 |
-| #140 | [milestone Milestone 8 ] `bench/latency-slos` — SLO ben... | merged/merged | 2026-07-21 |
-| #144 | Fix WasmAgent/symkernel#139 ([milestone Milestone 8 ] `de... | merged/merged | 2026-07-21 |
-| #133 | [milestone Milestone 8 ] `deploy/kubernetes/` — product... | merged/auto_closed_resolved | 2026-07-21 |
+| #161 | Fix WasmAgent/symkernel#155 ([milestone Milestone 9 ] `in... | merged/merged | 2026-07-22 |
+| #160 | Fix WasmAgent/symkernel#157 ([milestone Milestone 9 ] `PO... | completed/complexity_gate_split | 2026-07-22 |
+| #155 | [milestone Milestone 9 ] `internal/tenant` — Tenant res... | completed/complexity_gate_split | 2026-07-22 |
+| #156 | [milestone Milestone 9 ] `internal/cache` — Redis-backe... | completed/complexity_gate_split | 2026-07-22 |
+| #157 | [milestone Milestone 9 ] `POST /v1/verify/cel` enhancemen... | completed/complexity_gate_split | 2026-07-22 |
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
