@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-22 14:46 UTC by patrol_
+_Last updated: 2026-07-22 14:48 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 3 |
+| Pending | 2 |
 | Active (running/reviewing) | 0 |
-| Blocked | 0 |
+| Blocked | 1 |
 | Completed/Merged (all time) | 137 |
 
 ## Recent Activity (last 5)
@@ -23,6 +23,7 @@ _Last updated: 2026-07-22 14:46 UTC by patrol_
 
 ## Waiting for Human
 
+- #187: Fix WasmAgent/symkernel#175 ([milestone Milestone 10] `internal/cache/distributed` — Redis-backed verification result 
 - #176: [milestone Milestone 10] `internal/distributed/sharding` — Consistent hashing ring for work distributio...
 
 ---
