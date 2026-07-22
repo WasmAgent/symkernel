@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-22 12:52 UTC by patrol_
+_Last updated: 2026-07-22 12:55 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 4 |
+| Pending | 3 |
 | Active (running/reviewing) | 1 |
-| Blocked | 0 |
+| Blocked | 1 |
 | Completed/Merged (all time) | 136 |
 
 ## Recent Activity (last 5)
@@ -23,6 +23,7 @@ _Last updated: 2026-07-22 12:52 UTC by patrol_
 
 ## Waiting for Human
 
+- #188: Fix WasmAgent/symkernel#173 ([milestone Milestone 10] `internal/distributed/coordination` — Raft-based leader election
 - #184: [milestone Milestone 10] `docs/10-scaling.md` — Scaling guide: capacity planning per tier (CEL: 10K RPS...
 - #176: [milestone Milestone 10] `internal/distributed/sharding` — Consistent hashing ring for work distributio...
 
