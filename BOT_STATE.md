@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-22 08:20 UTC by patrol_
+_Last updated: 2026-07-22 08:26 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 0 |
-| Active (running/reviewing) | 0 |
-| Blocked | 5 |
+| Active (running/reviewing) | 1 |
+| Blocked | 4 |
 | Completed/Merged (all time) | 133 |
 
 ## Recent Activity (last 5)
@@ -26,7 +26,6 @@ _Last updated: 2026-07-22 08:20 UTC by patrol_
 - #184: [milestone Milestone 10] `docs/10-scaling.md` — Scaling guide: capacity planning per tier (CEL: 10K RPS...
 - #176: [milestone Milestone 10] `internal/distributed/sharding` — Consistent hashing ring for work distributio...
 - #175: [milestone Milestone 10] `internal/cache/distributed` — Redis-backed verification result cache with TTL...
-- #173: [milestone Milestone 10] `internal/distributed/coordination` — Raft-based leader election and work dist...
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
