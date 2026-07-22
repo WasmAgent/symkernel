@@ -194,6 +194,8 @@ func NewNode(cfg NodeConfig, transport Transport) *Node {
 		cfg.ElectionTicksMin = defaultElectionMin
 	}
 	if cfg.ElectionTicksMax <= cfg.ElectionTicksMin {
+		// Preserve the default range width so randomised election timeouts
+		// spread across a meaningful interval when the caller sets only Min.
 		cfg.ElectionTicksMax = cfg.ElectionTicksMin + (defaultElectionMax - defaultElectionMin)
 	}
 	if cfg.QuorumLossTicks <= 0 {
@@ -261,7 +263,10 @@ func (n *Node) Term() uint64 {
 
 // Receive accepts an inbound message from the transport. It is the
 // entry point a production transport calls when a message arrives over
-// the wire.
+// the wire. Both Receive and Tick hold n.mu when touching n.inbox, so
+// there is no data race. Appending to a nil slice in Go is well-defined
+// (allocates a new backing array) — no message is ever lost even if Tick
+// sets n.inbox = nil just before a concurrent Receive call arrives.
 func (n *Node) Receive(m Message) {
 	n.mu.Lock()
 	n.inbox = append(n.inbox, m)
