@@ -192,6 +192,35 @@ Production operations documentation for running and maintaining symkerneld.
 | [Decision Log Analysis](docs/decision-log-analysis.md) | Audit log schema, export API, `jq` one-liners for pass/fail rates, tier distribution, duplicate detection |
 | [Capacity Planning](docs/capacity-planning.md) | Resource consumption per tier, memory/CPU sizing, vertical vs horizontal scaling, cache tuning, SLO targets |
 
+## Multi-Tenancy
+
+symkernel supports multi-tenant deployments via the tenant resolver middleware
+(`internal/tenant`). Tenant IDs are extracted from the JWT `sub` claim or the
+`X-Tenant-ID` header and validated against `SYMKERNEL_ALLOWED_TENANTS`.
+
+An example configuration for three tenants with different quotas and memory
+limits is provided in [`deploy/tenant-config.yaml`](deploy/tenant-config.yaml):
+
+| Tenant | Cache TTL | QPS / Burst | Memory | Use case |
+|---|---|---|---|---|
+| org-a | 300 s | 100 / 200 | 512 Mi | Production |
+| org-b | 600 s | 50 / 100 | 256 Mi | Staging |
+| org-c | disabled | 20 / 40 | 128 Mi | Development |
+
+Key environment variables:
+
+| Variable | Description |
+|---|---|
+| `SYMKERNEL_ALLOWED_TENANTS` | Comma-separated allowlist of tenant IDs (`internal/tenant`) |
+| `SYMKERNEL_CLIENT_TOKEN` | Auth token for the `internal/auth` middleware |
+| `SYMKERNEL_ADMIN_TOKEN` | Admin token for `/v1/tenant/usage` and other admin endpoints (M9) |
+| `SYMKERNEL_CACHE_TTL` | Redis-backed cache TTL in seconds; 0 disables caching (M9) |
+| `SYMKERNEL_TENANT_QUOTA_DEFAULT` | Default per-tenant rate limit (requests/s) when not overridden (M9) |
+| `SYMKERNEL_TENANT_QUOTA_OVERRIDES` | JSON map of `tenant_id → requests/s` for per-tenant quota (M9) |
+| `SYMKERNEL_TENANT_MEMORY_LIMITS` | JSON map of `tenant_id → MiB` for wazero sandbox memory caps (M9) |
+| `SYMKERNEL_RATE_LIMIT_QPS` | Token-bucket QPS (M8 milestone) |
+| `SYMKERNEL_RATE_LIMIT_BURST` | Token-bucket burst capacity (M8 milestone) |
+
 ## Schema alignment
 
 `schemas/` holds `constraint-ir.schema.json` and `constraint-violation.schema.json` pinned from `wasmagent-js`. `make sync-schemas` refreshes them; CI fails on drift.
