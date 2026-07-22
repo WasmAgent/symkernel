@@ -1,0 +1,103 @@
+# ============================================================
+# symkernel — Example multi-tenant configuration
+# ============================================================
+#
+# This manifest shows env var setup for a 3-tenant deployment
+# (org-a, org-b, org-c) with different quotas and memory limits.
+#
+# Usage (Docker Compose / Kubernetes ConfigMap / manual):
+#   The env vars below are set on the symkerneld process.  In a
+#   single-instance deployment all tenants share one process;
+#   SYMKERNEL_ALLOWED_TENANTS gates which tenant IDs are accepted.
+#
+#   In Kubernetes, mount this as a ConfigMap or use an operator that
+#   reconciles these values into separate Deployments per tenant.
+#
+# See also: README > Multi-Tenancy, docs/environment-vars.md
+# ============================================================
+
+# --------------------------------------------------------------
+# Global settings (applies to all tenants)
+# --------------------------------------------------------------
+
+# Comma-separated allowlist of tenant IDs accepted by the tenant
+# resolver middleware (internal/tenant).
+SYMKERNEL_ALLOWED_TENANTS: "org-a,org-b,org-c"
+
+# Admin token required for POST /v1/tenant/usage and other admin
+# endpoints (Milestone 9).
+SYMKERNEL_ADMIN_TOKEN: "${SYMKERNEL_ADMIN_TOKEN}"
+
+# Default per-tenant quota (requests per second) used when a tenant
+# is not present in SYMKERNEL_TENANT_QUOTA_OVERRIDES (internal/quota,
+# Milestone 9).
+SYMKERNEL_TENANT_QUOTA_DEFAULT: "20"
+
+# Per-tenant quota overrides: JSON map of tenant_id → requests/second.
+# Tenants not listed here fall back to SYMKERNEL_TENANT_QUOTA_DEFAULT.
+SYMKERNEL_TENANT_QUOTA_OVERRIDES: >-
+  {
+    "org-a": 100,
+    "org-b": 50
+  }
+
+# Per-tenant wazero sandbox memory limits (MiB): JSON map of
+# tenant_id → memory limit.  Tenants not listed use the server
+# default (64 MiB).  Enforced by internal/isolation (Milestone 9).
+SYMKERNEL_TENANT_MEMORY_LIMITS: >-
+  {
+    "org-a": 256,
+    "org-b": 128,
+    "org-c": 64
+  }
+
+# Cache TTL in seconds for the Redis-backed result cache
+# (internal/cache, Milestone 9).  Set to 0 to disable caching.
+SYMKERNEL_CACHE_TTL: "300"
+
+# --------------------------------------------------------------
+# Per-tenant overrides applied via container orchestration
+# (Docker Compose environment, K8s ConfigMaps, etc.)
+# --------------------------------------------------------------
+#
+# Each tenant block documents the env vars an operator would
+# override when running a dedicated symkerneld instance per tenant.
+# In a single-instance setup the JSON-style vars above handle
+# per-tenant differentiation directly.
+
+tenants:
+  - id: org-a
+    display_name: "Organization A — Production"
+    # Auth token for internal/auth middleware.
+    client_token: "${SYMKERNEL_CLIENT_TOKEN_ORG_A}"
+    # Cache TTL override for this tenant (seconds).
+    # 0 disables caching — useful for security-sensitive decisions.
+    cache_ttl_seconds: 300
+    # Per-tenant rate-limiting (internal/ratelimit, M8 milestone).
+    # Overridden by SYMKERNEL_TENANT_QUOTA_OVERRIDES in M9.
+    rate_limit_qps: 100
+    rate_limit_burst: 200
+    # Container resource hints for orchestration.
+    resources:
+      memory_limit: "512Mi"
+      cpu_limit: "500m"
+
+  - id: org-b
+    display_name: "Organization B — Staging"
+    client_token: "${SYMKERNEL_CLIENT_TOKEN_ORG_B}"
+    cache_ttl_seconds: 600
+    rate_limit_qps: 50
+    rate_limit_burst: 100
+    resources:
+      memory_limit: "256Mi"
+      cpu_limit: "250m"
+
+  - id: org-c
+    display_name: "Organization C — Development"
+    client_token: "${SYMKERNEL_CLIENT_TOKEN_ORG_C}"
+    cache_ttl_seconds: 0  # caching disabled for dev
+    rate_limit_qps: 20
+    rate_limit_burst: 40
+    resources:
+      memory_limit: "128Mi"
+      cpu_limit: "100m"
