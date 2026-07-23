@@ -15,6 +15,7 @@ import (
 	"github.com/WasmAgent/symkernel/internal/audit"
 	"github.com/WasmAgent/symkernel/internal/cache"
 	cellib "github.com/WasmAgent/symkernel/internal/cel"
+	criterion "github.com/WasmAgent/symkernel/internal/criterion"
 	"github.com/WasmAgent/symkernel/internal/diagnostics"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
@@ -35,6 +36,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("POST /v1/verify/cel", cellib.Handler())
 	mux.Handle("POST /v1/verify/z3", verify.Handler(&verify.Z3Solver{}))
+	mux.Handle("POST /v1/verify/criterion", criterion.Handler())
 
 	orch := orchestrator.NewRouter()
 	orch.RegisterRoutes(mux)
