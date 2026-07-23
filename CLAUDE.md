@@ -27,7 +27,7 @@ Provides a three-tier reasoning service over HTTP consumed by `wasmagent-js`,
 ### This repository owns
 - `symkerneld` HTTP server — CEL, wazero sandbox, Z3 SMT, composed policy, batch endpoints
 - `aep-core` Go package — CEL/wazero/Z3 shared types (RecordingMode, ConstraintIR adapter)
-- Criterion/ConstraintIR protocol implementation
+- Criterion/ConstraintIR protocol **implementation** (the Go verifier; the schema *definitions* are canonical in `wasmagent-protocol`)
 - Policy composition engine (`any_pass` / `all_pass` / `short_circuit`)
 - Verification trace explainer (`internal/explain`)
 - Batch verification (`internal/batch`)
@@ -37,7 +37,8 @@ Provides a three-tier reasoning service over HTTP consumed by `wasmagent-js`,
 
 | Capability | Owner |
 |---|---|
-| AEP schema definition and emission | `wasmagent-js` (`@wasmagent/aep`) |
+| AEP + compliance **schema definitions** (Criterion/ConstraintIR, etc.) | `wasmagent-protocol` (`@wasmagent/protocol`) |
+| AEP evidence **emission** at runtime | `wasmagent-js` (`@wasmagent/aep`) |
 | MCP firewall, process-level policy enforcement | `wasmagent-js` (`@wasmagent/mcp-gateway`) |
 | Gateway-level HTTP evidence (Proxy-Wasm) | `wasmagent-proxy` |
 | AgentBOM / MCP Posture specifications | `agent-trust-infra` |
