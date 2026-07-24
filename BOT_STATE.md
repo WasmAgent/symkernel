@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-24 22:14 UTC by patrol_
+_Last updated: 2026-07-24 22:26 UTC by patrol_
 
 ## Queue
 
@@ -23,7 +23,6 @@ _Last updated: 2026-07-24 22:14 UTC by patrol_
 
 ## Waiting for Human
 
-- #212: [milestone Milestone 4 ] `schemas/` — `make sync-schemas` (pulling from `@wasmagent/protocol`) integrat...
 - #211: [milestone Milestone 3 — Core Differentiation] `internal/repair` — generate-error-fix loop: `Repair(program string, trapResul...
 - #210: [milestone Milestone 1 ] `schemas/` — `make sync-schemas` vendors `constraint-ir.schema.json` and `cons...
 - #207: Fix WasmAgent/symkernel#202 ([milestone Milestone 11] `internal/traffic` — Traffic shadowing and canary deployments: r
