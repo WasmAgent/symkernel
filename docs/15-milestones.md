@@ -157,3 +157,17 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `internal/analytics` — Verification analytics pipeline: aggregate statistics on policy evaluation patterns, common failure modes, performance trends; export to Prometheus metrics and optional PostgreSQL backend
 - [ ] `internal/distributed/testing` — Cluster testing harness: spin up local 3-node cluster using `docker-compose`, test leader election, partition recovery, and workload distribution under simulated failures
 - [ ] `docs/10-scaling.md` — Scaling guide: capacity planning per tier (CEL: 10K RPS/node, wazero: 1K RPS/node, Z3: 100 RPS/node), multi-region deployment patterns, disaster recovery procedures, and cost optimization strategies
+
+## Milestone 11 — Production Orchestration & Policy Governance (Phase 4)
+
+> Enterprise readiness: transform from verification service to production policy platform.
+> Goal: enable safe policy rollout at scale, governance workflows, and operational excellence.
+
+- [ ] `internal/governance` — Policy lifecycle management: versioned policy schemas with approval workflows, staging environments (`dev/staging/prod`), and blue-green deployment patterns; support policy rollback and audit trails
+- [ ] `POST /v1/policies/publish` — Policy publication endpoint: `{"policy":{"id":"...","stagedVersion":"...","approve":true}}` → promotes staged policy to production; integrates with governance workflow for required approvals
+- [ ] `internal/cache` — Distributed policy cache: Redis-backed caching layer for compiled CEL programs and Z3 constraints with TTL-based invalidation; cache warmup on deployment and telemetry for cache hit rates
+- [ ] `internal/traffic` — Traffic shadowing and canary deployments: route percentage of verification requests to new policy versions; shadow mode for validation without blocking; automatic rollback on error-rate thresholds
+- [ ] `internal/observability` — Policy performance dashboards: per-policy latency distributions, error rate tracking, resource usage metrics; integration with Grafana/Prometheus for alerting on policy degradation
+- [ ] `internal/batch` — Batch verification API: `POST /v1/verify/batch` for bulk policy evaluation (1000+ constraints) with parallel execution and progress streaming; optimized for CI/CD pipeline integration
+- [ ] `internal/federation` — Multi-region deployment support: configurable policy replication across regions with eventual consistency; region-aware routing for latency optimization and disaster recovery
+- [ ] `docs/operations.md` — Production runbooks: deployment procedures, scaling policies, incident response workflows, and capacity planning guidelines for 10k+ RPS
