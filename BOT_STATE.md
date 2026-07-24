@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-24 21:48 UTC by patrol_
+_Last updated: 2026-07-24 21:59 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 0 |
-| Active (running/reviewing) | 0 |
-| Blocked | 7 |
+| Active (running/reviewing) | 1 |
+| Blocked | 6 |
 | Completed/Merged (all time) | 146 |
 
 ## Recent Activity (last 5)
@@ -23,7 +23,11 @@ _Last updated: 2026-07-24 21:48 UTC by patrol_
 
 ## Waiting for Human
 
+- #212: [milestone Milestone 4 ] `schemas/` — `make sync-schemas` (pulling from `@wasmagent/protocol`) integrat...
+- #211: [milestone Milestone 3 — Core Differentiation] `internal/repair` — generate-error-fix loop: `Repair(program string, trapResul...
+- #210: [milestone Milestone 1 ] `schemas/` — `make sync-schemas` vendors `constraint-ir.schema.json` and `cons...
 - #207: Fix WasmAgent/symkernel#202 ([milestone Milestone 11] `internal/traffic` — Traffic shadowing and canary deployments: r
+- #206: [milestone Milestone 11] `docs/operations.md` — Production runbooks: deployment procedures, scaling pol...
 - #204: Fix WasmAgent/symkernel#203 ([milestone Milestone 11] `internal/observability` — Policy performance dashboards: per-po
 - #200: [milestone Milestone 11] `POST /v1/policies/publish` — Policy publication endpoint: `{\
 
