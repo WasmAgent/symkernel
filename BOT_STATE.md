@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-24 10:19 UTC by patrol_
+_Last updated: 2026-07-24 10:20 UTC by patrol_
 
 ## Queue
 
@@ -28,7 +28,6 @@ _Last updated: 2026-07-24 10:19 UTC by patrol_
 - #205: [milestone Milestone 11] `internal/federation` — Multi-region deployment support: configurable policy r...
 - #204: Fix WasmAgent/symkernel#203 ([milestone Milestone 11] `internal/observability` — Policy performance dashboards: per-po
 - #200: [milestone Milestone 11] `POST /v1/policies/publish` — Policy publication endpoint: `{\
-- #199: [milestone Milestone 11] `internal/governance` — Policy lifecycle management: versioned policy schemas ...
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
