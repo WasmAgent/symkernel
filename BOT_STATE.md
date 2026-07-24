@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-24 09:10 UTC by patrol_
+_Last updated: 2026-07-24 09:16 UTC by patrol_
 
 ## Queue
 
@@ -25,6 +25,7 @@ _Last updated: 2026-07-24 09:10 UTC by patrol_
 
 - #207: Fix WasmAgent/symkernel#202 ([milestone Milestone 11] `internal/traffic` — Traffic shadowing and canary deployments: r
 - #206: [milestone Milestone 11] `docs/operations.md` — Production runbooks: deployment procedures, scaling pol...
+- #205: [milestone Milestone 11] `internal/federation` — Multi-region deployment support: configurable policy r...
 - #204: Fix WasmAgent/symkernel#203 ([milestone Milestone 11] `internal/observability` — Policy performance dashboards: per-po
 
 ---
