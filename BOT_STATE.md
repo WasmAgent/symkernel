@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-24 11:51 UTC by patrol_
+_Last updated: 2026-07-24 12:21 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 0 |
-| Active (running/reviewing) | 0 |
-| Blocked | 4 |
+| Active (running/reviewing) | 1 |
+| Blocked | 3 |
 | Completed/Merged (all time) | 146 |
 
 ## Recent Activity (last 5)
@@ -24,7 +24,6 @@ _Last updated: 2026-07-24 11:51 UTC by patrol_
 ## Waiting for Human
 
 - #207: Fix WasmAgent/symkernel#202 ([milestone Milestone 11] `internal/traffic` — Traffic shadowing and canary deployments: r
-- #206: [milestone Milestone 11] `docs/operations.md` — Production runbooks: deployment procedures, scaling pol...
 - #204: Fix WasmAgent/symkernel#203 ([milestone Milestone 11] `internal/observability` — Policy performance dashboards: per-po
 - #200: [milestone Milestone 11] `POST /v1/policies/publish` — Policy publication endpoint: `{\
 
