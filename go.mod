@@ -3,6 +3,7 @@ module github.com/WasmAgent/symkernel
 go 1.25.0
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/cel-go v0.29.2
 	github.com/google/uuid v1.6.0
 	github.com/tetratelabs/wazero v1.12.0
@@ -16,7 +17,6 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
