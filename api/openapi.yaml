@@ -1,0 +1,759 @@
+openapi: 3.1.0
+
+info:
+  title: symkerneld Verification API
+  version: 1.0.0
+  summary: Three-tier symbolic verification service (CEL + wazero + Z3/SMT) for the WasmAgent ecosystem.
+  description: |
+    `symkerneld` is the symbolic verification backend of the WasmAgent
+    ecosystem. It exposes a three-tier reasoning service over HTTP:
+
+    | Tier | Technology | Use case |
+    |---|---|---|
+    | Lightweight rules | cel-go | Fast policy evaluation, capability checks |
+    | Hard isolation | wazero (WASM sandbox) | Untrusted code execution with memory + network caps |
+    | Formal proofs | Z3 SMT solver | Mathematical satisfiability for invariant and safety properties |
+
+    This specification documents the **Phase 1b** tier — the Z3 / SMT-LIB and
+    symbolic-execution endpoints — together with the foundational CEL and
+    Criterion endpoints that share the same OPA-envelope request/response
+    convention and the cross-repo `decision_id` contract.
+
+    ### Conventions
+    - **OPA envelope.** Verification endpoints that wrap an opaque input accept
+      a body of the form `{"input":{...}}` and respond with
+      `{"result":{...},"decision_id":"<uuid>"}`. The Criterion adapter is the
+      exception: it speaks the wasmagent-js Criterion protocol directly.
+    - **`decision_id`.** Every response carries a UUID `decision_id` (GENAI_SEMCONV
+      field naming) that aligns with `@wasmagent/otel-exporter`. Do not rename it.
+    - **Auth.** All endpoints require `Authorization: Bearer <SYMKERNEL_CLIENT_TOKEN>`.
+  license:
+    name: Apache-2.0
+  contact:
+    name: WasmAgent
+    url: https://github.com/WasmAgent/symkernel
+
+servers:
+  - url: http://localhost:8080
+    description: Local development (SYMKERNEL_ADDR)
+  - url: https://symkernel.workers.dev
+    description: Cloudflare Containers deployment
+
+tags:
+  - name: SMT
+    description: Phase 1b — Z3 / SMT-LIB constraint solving and satisfiability proofs.
+  - name: Symbolic Execution
+    description: Phase 1b — symbolic path exploration over wazero modules.
+  - name: CEL
+    description: Phase 0 — cel-go expression evaluation.
+  - name: Criterion
+    description: Phase 0 — wasmagent-js Criterion adapter.
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Phase 1b — SMT / Z3 endpoints (the focus of this revision)
+  # ---------------------------------------------------------------------------
+  /v1/verify/z3:
+    post:
+      tags: [SMT]
+      operationId: verifyZ3
+      summary: Check SMT-LIB constraints with Z3 (implemented).
+      description: |
+        Submits an SMT-LIB v2 constraint script to the Z3 SMT solver and
+        returns the satisfiability verdict (`sat` / `unsat` / `unknown`) with
+        an optional satisfying model.
+
+        The handler appends the solver epilogue `(check-sat)`, `(get-model)`,
+        `(exit)` to the supplied `constraints_smt2`, so the input must contain
+        only declarations and assertions (no `(check-sat)` of your own).
+
+        **Timeout semantics.** When the solver does not finish within
+        `timeout_ms`, the endpoint responds `200 OK` with
+        `result.sat = "unknown"` and `result.model = null` — it does *not*
+        raise an HTTP error. Use this `unknown` verdict to distinguish "no
+        proof found in budget" from genuine `sat` / `unsat` results.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Z3VerifyRequest"
+            examples:
+              sat:
+                summary: Trivially satisfiable
+                value:
+                  input:
+                    constraints_smt2: |
+                      (declare-const x Int)
+                      (assert (> x 5))
+                    timeout_ms: 2000
+              unsat:
+                summary: Trivially unsatisfiable
+                value:
+                  input:
+                    constraints_smt2: "(assert false)"
+                    timeout_ms: 2000
+              namedUnsatCore:
+                summary: Named assertions yield an unsat core
+                value:
+                  input:
+                    constraints_smt2: |
+                      (declare-const x Int)
+                      (declare-const y Int)
+                      (assert (> x 0))
+                      (assert (< x 0))
+      responses:
+        "200":
+          description: Solver returned a verdict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Z3VerifyResponse"
+              examples:
+                sat:
+                  summary: Satisfiable, with a model
+                  value:
+                    result:
+                      sat: sat
+                      model:
+                        x: "6"
+                    decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+                unsat:
+                  summary: Unsatisfiable, model omitted
+                  value:
+                    result:
+                      sat: unsat
+                      model: null
+                    decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+                unknownTimeout:
+                  summary: Solver exceeded timeout_ms
+                  value:
+                    result:
+                      sat: unknown
+                      model: null
+                    decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/SolverInternalError"
+
+  /v1/verify/smt:
+    post:
+      tags: [SMT]
+      operationId: verifySmt
+      summary: Check a constraint set with check-sat / get-model / get-unsat-core (Phase 1b).
+      description: |
+        A higher-level SMT endpoint that accepts a constraint set as an array
+        of SMT-LIB v2 fragments plus an optional partial model, and returns a
+        structured verdict distinguishing the three SMT responses:
+        `check-sat` (sat/unsat/unknown), `get-model` (satisfying assignment),
+        and `get-unsat-core` (the minimal inconsistent subset).
+
+        **Solver timeout** yields HTTP `504` with `error.code =
+        solver_timeout`. **Memory-limit exceeded** (the constraint set blew
+        the configured solver memory budget) yields HTTP `507` with
+        `error.code = solver_memory_limit_exceeded`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmtVerifyRequest"
+            examples:
+              sat:
+                summary: Satisfiable integer constraint
+                value:
+                  input:
+                    constraints:
+                      - "(declare-const x Int)"
+                      - "(assert (and (> x 0) (< x 10)))"
+                    model: {}
+              unsatCore:
+                summary: Contradictory named assertions
+                value:
+                  input:
+                    constraints:
+                      - "(declare-const a Int)"
+                      - "(declare-const b Int)"
+                      - "(assert (! (> a b) :named g1))"
+                      - "(assert (! (< a b) :named g2))"
+      responses:
+        "200":
+          description: Solver returned a verdict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmtVerifyResponse"
+              examples:
+                sat:
+                  summary: Satisfiable — model attached
+                  value:
+                    result:
+                      sat: true
+                      model:
+                        x: "7"
+                      decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+                unsatCore:
+                  summary: Unsatisfiable — minimal core attached
+                  value:
+                    result:
+                      sat: false
+                      model: null
+                      unsat_core: [g1, g2]
+                      decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "504":
+          $ref: "#/components/responses/SolverTimeout"
+        "507":
+          $ref: "#/components/responses/SolverMemoryLimitExceeded"
+        "500":
+          $ref: "#/components/responses/SolverInternalError"
+
+  /v1/verify/symbolic:
+    post:
+      tags: [Symbolic Execution]
+      operationId: verifySymbolic
+      summary: Symbolically execute a wazero module and collect path conditions (Phase 1b).
+      description: |
+        Decodes a base64-encoded Wasm module, symbolically executes it from
+        `entry` with the supplied symbolic `args`, and returns each explored
+        execution path together with the Z3 constraint formula that guards it
+        and a satisfying model. `explored` reports how many paths the engine
+        visited before hitting its budget.
+
+        **Path explosion / memory.** If the symbolic engine exceeds its memory
+        budget (unbounded loop, exponential branching), the endpoint returns
+        HTTP `507` with `error.code = symbolic_memory_limit_exceeded`.
+        **Solver timeout** on an individual path returns HTTP `504` with
+        `error.code = solver_timeout`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SymbolicExecRequest"
+            examples:
+              branch:
+                summary: A module with one symbolic branch
+                value:
+                  input:
+                    wasmBinary: AGFzbQEAAAA=#base64-truncated
+                    entry: verify
+                    args:
+                      - kind: Int
+                        name: n
+                        symbolic: true
+      responses:
+        "200":
+          description: Symbolic execution completed within budget.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SymbolicExecResponse"
+              examples:
+                twoPaths:
+                  summary: Two feasible paths
+                  value:
+                    result:
+                      paths:
+                        - constraints: "(declare-const n Int) (assert (and (> n 0) (<= n 10)))"
+                          model:
+                            n: "5"
+                        - constraints: "(declare-const n Int) (assert (<= n 0))"
+                          model:
+                            n: "0"
+                      explored: 2
+                      decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "504":
+          $ref: "#/components/responses/SolverTimeout"
+        "507":
+          $ref: "#/components/responses/SymbolicMemoryLimitExceeded"
+        "500":
+          $ref: "#/components/responses/SolverInternalError"
+
+  # ---------------------------------------------------------------------------
+  # Foundational endpoints (share the OPA envelope + decision_id contract)
+  # ---------------------------------------------------------------------------
+  /v1/verify/cel:
+    post:
+      tags: [CEL]
+      operationId: verifyCel
+      summary: Evaluate a CEL expression (Phase 0).
+      description: |
+        Evaluates a Common Expression Language expression against a context
+        object, wrapped in the OPA envelope `{"input":{...}}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CelVerifyRequest"
+            examples:
+              pass:
+                value:
+                  input:
+                    expr: "input.age > 18"
+                    context:
+                      age: 21
+                    timeout_ms: 1000
+      responses:
+        "200":
+          description: Expression evaluated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CelVerifyResponse"
+              examples:
+                pass:
+                  value:
+                    result:
+                      ok: true
+                      value: true
+                      evalMs: 0.04
+                    decision_id: 4d6f3b8a-7c2e-4f1a-9b5d-0a1c2e3f4a5b
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/verify/criterion:
+    post:
+      tags: [Criterion]
+      operationId: verifyCriterion
+      summary: wasmagent-js Criterion adapter (Phase 0).
+      description: |
+        Evaluates a single Criterion against the embedded CEL verifier. This
+        endpoint speaks the wasmagent-js Criterion protocol directly (it does
+        **not** use the OPA envelope). The Criterion body conforms to the
+        vendored `constraint-ir.schema.json`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/constraint-ir.schema.json"
+            examples:
+              pass:
+                value:
+                  criterion:
+                    id: age-gate
+                    description: Caller must be an adult
+                    verify_method: cel_expr
+                    level: hard
+                    priority: 90
+                    category: content
+                    arg:
+                      expr: "input.age > 18"
+                      context:
+                        age: 21
+      responses:
+        "200":
+          description: Criterion evaluated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CriterionResponse"
+              examples:
+                pass:
+                  value:
+                    ok: true
+                    criterionId: age-gate
+                fail:
+                  value:
+                    ok: false
+                    criterionId: age-gate
+                    hint: Caller must be an adult
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Expression evaluated but did not yield a boolean verdict.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: non_boolean_result
+                  message: "cel expression did not return bool, got string"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Send `Authorization: Bearer <SYMKERNEL_CLIENT_TOKEN>`. A missing or
+        mismatched token yields `401 Unauthorized`.
+
+  responses:
+    BadRequest:
+      description: Malformed request body or missing required field.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            missingConstraints:
+              value:
+                error:
+                  code: invalid_constraints
+                  message: constraints_smt2 is required
+            invalidJson:
+              value:
+                error:
+                  code: invalid_request
+                  message: "invalid request: EOF"
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: unauthorized
+              message: Unauthorized
+    SolverTimeout:
+      description: |
+        The solver did not reach a verdict within the per-request timeout
+        budget. For `/v1/verify/z3` this is signalled in-band as
+        `result.sat = "unknown"` with HTTP `200`; the higher-level
+        `/v1/verify/smt` and `/v1/verify/symbolic` endpoints surface it as
+        HTTP `504` with this body.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: solver_timeout
+              message: "z3 exceeded timeout_ms budget (2000ms)"
+    SolverMemoryLimitExceeded:
+      description: |
+        The constraint set exceeded the configured solver memory budget.
+        Raised by the higher-level SMT endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: solver_memory_limit_exceeded
+              message: "z3 memory budget exhausted while solving"
+    SymbolicMemoryLimitExceeded:
+      description: |
+        The symbolic execution engine exceeded its memory budget (path
+        explosion, unbounded loop, exponential branching).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: symbolic_memory_limit_exceeded
+              message: "symbolic engine exceeded path budget before termination"
+    SolverInternalError:
+      description: The solver crashed or produced an unparseable result.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: solver_internal_error
+              message: "solver error: z3: exit status 1"
+
+  schemas:
+    DecisionId:
+      type: string
+      format: uuid
+      description: |
+        Per-request correlation identifier (GENAI_SEMCONV). Present on every
+        response; do not rename — it is a cross-repo contract consumed by
+        `@wasmagent/otel-exporter` and `open-agent-audit`.
+
+    SatVerdict:
+      type: string
+      enum: [sat, unsat, unknown]
+      description: |
+        Z3 satisfiability verdict. `unknown` covers both genuine
+        indeterminacy and solver timeout (budget exhausted).
+
+    SmtModel:
+      type: object
+      description: A satisfying assignment of variables to values, as reported by Z3.
+      additionalProperties: true
+      example:
+        x: "6"
+        y: "(- 7)"
+
+    UnsatCore:
+      type: array
+      description: Names of the named assertions that form a minimal unsatisfiable core.
+      items:
+        type: string
+      example: [g1, g2]
+
+    # ---- Phase 1b: Z3 endpoint (implemented) --------------------------------
+    Z3VerifyRequest:
+      type: object
+      description: OPA-envelope request for `POST /v1/verify/z3`.
+      required: [input]
+      properties:
+        input:
+          type: object
+          required: [constraints_smt2]
+          properties:
+            constraints_smt2:
+              type: string
+              minLength: 1
+              description: |
+                SMT-LIB v2 declarations and assertions. The handler appends
+                `(check-sat)`, `(get-model)`, and `(exit)` automatically —
+                supply only `(declare-const ...)` / `(declare-fun ...)` and
+                `(assert ...)` forms.
+              example: |
+                (declare-const x Int)
+                (assert (> x 5))
+            timeout_ms:
+              type: integer
+              minimum: 1
+              default: 2000
+              description: Per-call solver timeout in milliseconds.
+
+    Z3VerifyResponse:
+      type: object
+      required: [result, decision_id]
+      properties:
+        result:
+          type: object
+          required: [sat]
+          properties:
+            sat:
+              $ref: "#/components/schemas/SatVerdict"
+            model:
+              allOf:
+                - $ref: "#/components/schemas/SmtModel"
+              nullable: true
+              description: Satisfying model when `sat = "sat"`, otherwise `null`.
+        decision_id:
+          $ref: "#/components/schemas/DecisionId"
+
+    # ---- Phase 1b: higher-level SMT endpoint --------------------------------
+    SmtVerifyRequest:
+      type: object
+      description: OPA-envelope request for `POST /v1/verify/smt`.
+      required: [input]
+      properties:
+        input:
+          type: object
+          required: [constraints]
+          properties:
+            constraints:
+              type: array
+              minItems: 1
+              description: SMT-LIB v2 fragments (declarations + assertions).
+              items:
+                type: string
+                minLength: 1
+              example:
+                - "(declare-const x Int)"
+                - "(assert (and (> x 0) (< x 10)))"
+            model:
+              type: object
+              additionalProperties: true
+              description: Optional partial model to seed the solver.
+
+    SmtVerifyResponse:
+      type: object
+      description: Response envelope for `POST /v1/verify/smt`.
+      required: [result]
+      properties:
+        result:
+          type: object
+          required: [sat, decision_id]
+          properties:
+            sat:
+              type: boolean
+              description: "`true` for sat, `false` for unsat or unknown."
+            model:
+              allOf:
+                - $ref: "#/components/schemas/SmtModel"
+              nullable: true
+            unsat_core:
+              allOf:
+                - $ref: "#/components/schemas/UnsatCore"
+              nullable: true
+            decision_id:
+              $ref: "#/components/schemas/DecisionId"
+
+    # ---- Phase 1b: symbolic execution endpoint ------------------------------
+    SymbolicArg:
+      type: object
+      description: A single symbolic entry-point argument.
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [Int, Real, Bool, BitVec]
+          description: SMT sort the argument ranges over.
+        symbolic:
+          type: boolean
+          default: true
+          description: If `false`, the argument is treated as a concrete constant.
+
+    SymbolicExecRequest:
+      type: object
+      description: OPA-envelope request for `POST /v1/verify/symbolic`.
+      required: [input]
+      properties:
+        input:
+          type: object
+          required: [wasmBinary, entry]
+          properties:
+            wasmBinary:
+              type: string
+              description: Base64-encoded `.wasm` module.
+              example: AGFzbQEAAAA=
+            entry:
+              type: string
+              description: Exported function to begin symbolic execution from.
+              example: verify
+            args:
+              type: array
+              items:
+                $ref: "#/components/schemas/SymbolicArg"
+
+    ExecutionPath:
+      type: object
+      description: One feasible execution path discovered by the symbolic engine.
+      required: [constraints]
+      properties:
+        constraints:
+          type: string
+          description: |
+            SMT-LIB v2 formula concretising this path (joined branch
+            conditions + memory-access predicates).
+          example: "(declare-const n Int) (assert (and (> n 0) (<= n 10)))"
+        model:
+          allOf:
+            - $ref: "#/components/schemas/SmtModel"
+          nullable: true
+
+    SymbolicExecResponse:
+      type: object
+      description: Response envelope for `POST /v1/verify/symbolic`.
+      required: [result]
+      properties:
+        result:
+          type: object
+          required: [paths, explored, decision_id]
+          properties:
+            paths:
+              type: array
+              items:
+                $ref: "#/components/schemas/ExecutionPath"
+            explored:
+              type: integer
+              minimum: 0
+              description: Number of paths the engine visited before its budget elapsed.
+            decision_id:
+              $ref: "#/components/schemas/DecisionId"
+
+    # ---- Foundational: CEL ---------------------------------------------------
+    CelVerifyRequest:
+      type: object
+      required: [input]
+      properties:
+        input:
+          type: object
+          required: [expr]
+          properties:
+            expr:
+              type: string
+              example: "input.age > 18"
+            context:
+              type: object
+              additionalProperties: true
+            timeout_ms:
+              type: integer
+              minimum: 1
+              default: 1000
+
+    CelVerifyResponse:
+      type: object
+      required: [result, decision_id]
+      properties:
+        result:
+          type: object
+          required: [ok]
+          properties:
+            ok:
+              type: boolean
+            value:
+              description: The raw CEL result (type depends on the expression).
+            evalMs:
+              type: number
+              format: float
+              description: Evaluation wall time in milliseconds.
+        decision_id:
+          $ref: "#/components/schemas/DecisionId"
+
+    # ---- Foundational: Criterion --------------------------------------------
+    CriterionResponse:
+      type: object
+      required: [ok, criterionId]
+      properties:
+        ok:
+          type: boolean
+        criterionId:
+          type: string
+        hint:
+          type: string
+          nullable: true
+          description: Present and non-empty only when `ok` is `false`.
+
+    # ---- Shared error envelope ----------------------------------------------
+    ErrorResponse:
+      type: object
+      description: |
+        Structured error body used by all error responses. `error.code` is a
+        machine-readable token; `error.message` is human-readable.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_request
+                - invalid_constraints
+                - unauthorized
+                - non_boolean_result
+                - solver_timeout
+                - solver_memory_limit_exceeded
+                - symbolic_memory_limit_exceeded
+                - solver_internal_error
+              description: Machine-readable error token.
+            message:
+              type: string
+              description: Human-readable error detail.
