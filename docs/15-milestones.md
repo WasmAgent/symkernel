@@ -18,7 +18,7 @@ language-agnostic and non-invasive to existing runtimes.
 - [ ] `POST /v1/verify/cel` — OPA-envelope endpoint: `{"input":{"expr":"...","context":{...}}}` → `{"result":{"ok":true,"value":...},"decision_id":"uuid","evalMs":0.04}`; add unit tests covering: valid expr, compile error, type mismatch, timeout
 - [ ] `POST /v1/verify/criterion` — wasmagent-js Criterion adapter: `{"criterion":{"id":"...","verify_method":"cel_expr","arg":{...}}}` → `{"ok":true,"criterionId":"..."}` or `{"ok":false,"criterionId":"...","hint":"..."}`; does NOT use OPA envelope (direct protocol match)
 - [ ] `api/openapi.yaml` — OpenAPI 3.1 spec covering all Phase 0 endpoints with request/response examples and error codes
-- [ ] `schemas/` — `make sync-schemas` vendors `constraint-ir.schema.json` and `constraint-violation.schema.json` from the `@wasmagent/protocol` published package (canonical source) at a pinned version; CI step fails if the vendored copy drifts
+- [x] `schemas/` — `make sync-schemas` vendors `constraint-ir.schema.json` and `constraint-violation.schema.json` from the `@wasmagent/protocol` published package (canonical source) at a pinned version; CI step fails if the vendored copy drifts
 - [ ] `deploy/Dockerfile` — multi-stage build: `golang:1.22-bookworm` builder → `gcr.io/distroless/static` final image; static binary, no CGO in Phase 0
 - [ ] `deploy/wrangler.toml` — Cloudflare Containers deployment config: container binding name `SYMKERNEL`, memory/vCPU sizing for Phase 0 load
 - [ ] `docker-compose.yml` — local dev environment: single `symkerneld` service with env vars; `docker compose up` is the quickstart
