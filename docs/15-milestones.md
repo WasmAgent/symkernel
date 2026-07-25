@@ -171,3 +171,17 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `internal/batch` — Batch verification API: `POST /v1/verify/batch` for bulk policy evaluation (1000+ constraints) with parallel execution and progress streaming; optimized for CI/CD pipeline integration
 - [ ] `internal/federation` — Multi-region deployment support: configurable policy replication across regions with eventual consistency; region-aware routing for latency optimization and disaster recovery
 - [ ] `docs/operations.md` — Production runbooks: deployment procedures, scaling policies, incident response workflows, and capacity planning guidelines for 10k+ RPS
+
+## Milestone 3 — Z3 Symbolic Solver Integration (Phase 1b)
+
+> Complete the three-tier symbolic reasoning stack with SMT constraint solving.
+> Goal: add symbolic path exploration, theorem proving, and verification beyond pure expression evaluation.
+
+- [ ] `internal/z3` — Z3 SMT solver bindings via `go-z3`: `Solve(constraints string, model map[string]any) (sat bool, model map[string]any, error)` with timeout support and memory limiter
+- [ ] `internal/symbolic` — symbolic execution engine: wazero bytecode tracer that extracts path conditions and builds Z3 constraint formulas from branch decisions and memory accesses
+- [ ] `POST /v1/verify/smt` — SMT constraint endpoint: `{"input":{"constraints":["..."],"model":{...}}}` → `{"result":{"sat":true,"model":{...},"decision_id":"uuid"}}`; supports `check-sat`, `get-model`, `get-unsat-core` responses
+- [ ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{"input":{"wasmBinary":"base64...","entry":"func","args":[...]}}` → `{"result":{"paths":[{"constraints":"...","model":{...}}],"explored":42,"decision_id":"uuid"}}`
+- [ ] `internal/z3/health.go` — Z3 solver health monitoring: memory usage, solver state, timeout detection, graceful degradation when Z3 is unavailable
+- [ ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs concrete testing on 6 verification tasks from `policy-compliance` fixtures; report path coverage and constraint solving time
+- [ ] `api/openapi.yaml` — extend spec with Phase 1b endpoints: add SMT-LIB constraint examples, symbolic execution request/response schemas, error codes for solver timeouts/memory limits
+- [ ] Deploy updates: `deploy/wrangler.toml` memory allocation increase for Z3 worker pool, `deploy/Dockerfile` multi-stage build with Z3 library compilation stage, health check endpoint for solver readiness
