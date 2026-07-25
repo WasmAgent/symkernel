@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-25 17:05 UTC by patrol_
+_Last updated: 2026-07-25 17:15 UTC by patrol_
 
 ## Queue
 
@@ -8,22 +8,21 @@ _Last updated: 2026-07-25 17:05 UTC by patrol_
 |---|---|
 | Pending | 1 |
 | Active (running/reviewing) | 0 |
-| Blocked | 6 |
-| Completed/Merged (all time) | 160 |
+| Blocked | 5 |
+| Completed/Merged (all time) | 161 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #233 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-25 |
 | #229 | Fix WasmAgent/symkernel#228 ([milestone Milestone 3 ] Dep... | completed/complexity_gate_split | 2026-07-25 |
 | #225 | Fix WasmAgent/symkernel#222 ([milestone Milestone 3 ] `PO... | completed/complexity_gate_split | 2026-07-25 |
 | #227 | [milestone Milestone 3 ] `api/openapi.yaml` — extend sp... | merged/merged | 2026-07-25 |
 | #228 | [milestone Milestone 3 ] Deploy updates: `deploy/wrangler... | completed/complexity_gate_split | 2026-07-25 |
-| #220 | [milestone Milestone 3 ] `internal/z3` — Z3 SMT solver ... | completed/complexity_gate_split | 2026-07-25 |
 
 ## Waiting for Human
 
-- #233: [milestone Milestone 3 — Core Differentiation] `internal/repair` — generate-error-fix loop: `Repair(program string, trapResul...
 - #230: [milestone Milestone 3] `internal/z3/solver.go` — Basic Z3 solver integration and initialization
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #224: [milestone Milestone 3 ] `internal/z3/health.go` — Z3 solver health monitoring: memory usage, solver st...
