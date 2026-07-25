@@ -1,12 +1,12 @@
 # Bot State
 
-_Last updated: 2026-07-25 11:00 UTC by patrol_
+_Last updated: 2026-07-25 11:10 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 2 |
+| Pending | 3 |
 | Active (running/reviewing) | 1 |
 | Blocked | 3 |
 | Completed/Merged (all time) | 157 |
@@ -23,6 +23,8 @@ _Last updated: 2026-07-25 11:00 UTC by patrol_
 
 ## Waiting for Human
 
+- #224: [milestone Milestone 3 ] `internal/z3/health.go` — Z3 solver health monitoring: memory usage, solver st...
+- #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
 - #221: [milestone Milestone 3 ] `internal/symbolic` — symbolic execution engine: wazero bytecode tracer that e...
 
 ---
