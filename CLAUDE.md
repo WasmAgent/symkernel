@@ -112,3 +112,16 @@ Bot: implement milestones in order per `docs/15-milestones.md`.
 ## How patrol sweep drives progress
 Patrol reads this CLAUDE.md roadmap section.
 Unchecked items → patrol opens issues with `claude` label → workers implement.
+
+---
+
+## Schema Synchronisation (CRITICAL)
+
+The verify.yml `schema-drift` gate compares local schema files against a pinned commit of `wasmagent-js`.
+
+**When modifying any `schemas/` files:**
+1. The matching change must first land in `wasmagent-js` (or `wasmagent-protocol`)
+2. After it merges, update the pinned SHA in `.claude-bot/verify.yml`'s `schema-drift` command
+3. The gate does a byte-for-byte `cmp` — even whitespace differences will fail it
+
+If you see: `cmp: EOF on one file after byte N` — the pinned SHA is stale.
