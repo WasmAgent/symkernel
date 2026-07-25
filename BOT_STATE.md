@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-25 20:09 UTC by patrol_
+_Last updated: 2026-07-25 20:17 UTC by patrol_
 
 ## Queue
 
@@ -8,7 +8,7 @@ _Last updated: 2026-07-25 20:09 UTC by patrol_
 |---|---|
 | Pending | 2 |
 | Active (running/reviewing) | 0 |
-| Blocked | 3 |
+| Blocked | 1 |
 | Completed/Merged (all time) | 162 |
 
 ## Recent Activity (last 5)
@@ -24,8 +24,6 @@ _Last updated: 2026-07-25 20:09 UTC by patrol_
 ## Waiting for Human
 
 - #238: [Milestone 3 Phase 1a] Core symbolic execution engine infrastructure: WASM analysis, Z3 bindings, path exploration
-- #237: [milestone Milestone 3] `internal/z3/solver.go` — Core Z3 solver integration with basic initialization and solver lifecycle management
-- #230: [milestone Milestone 3] `internal/z3/solver.go` — Basic Z3 solver integration and initialization
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
 
