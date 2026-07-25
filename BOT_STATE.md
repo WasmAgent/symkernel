@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-25 23:19 UTC by patrol_
+_Last updated: 2026-07-25 23:50 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 2 |
-| Active (running/reviewing) | 1 |
-| Blocked | 0 |
+| Pending | 0 |
+| Active (running/reviewing) | 0 |
+| Blocked | 3 |
 | Completed/Merged (all time) | 164 |
 
 ## Recent Activity (last 5)
@@ -23,6 +23,7 @@ _Last updated: 2026-07-25 23:19 UTC by patrol_
 
 ## Waiting for Human
 
+- #240: Implement internal/verify/symbolic.go symbolic execution engine
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
 
