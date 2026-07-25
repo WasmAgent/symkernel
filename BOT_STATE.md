@@ -1,12 +1,12 @@
 # Bot State
 
-_Last updated: 2026-07-25 19:35 UTC by patrol_
+_Last updated: 2026-07-25 19:45 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 0 |
+| Pending | 1 |
 | Active (running/reviewing) | 0 |
 | Blocked | 4 |
 | Completed/Merged (all time) | 162 |
@@ -23,6 +23,7 @@ _Last updated: 2026-07-25 19:35 UTC by patrol_
 
 ## Waiting for Human
 
+- #237: [milestone Milestone 3] `internal/z3/solver.go` — Core Z3 solver integration with basic initialization and solver lifecycle management
 - #230: [milestone Milestone 3] `internal/z3/solver.go` — Basic Z3 solver integration and initialization
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #224: [milestone Milestone 3 ] `internal/z3/health.go` — Z3 solver health monitoring: memory usage, solver st...
