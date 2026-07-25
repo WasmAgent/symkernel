@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-25 14:18 UTC by patrol_
+_Last updated: 2026-07-25 14:28 UTC by patrol_
 
 ## Queue
 
@@ -27,6 +27,7 @@ _Last updated: 2026-07-25 14:18 UTC by patrol_
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #224: [milestone Milestone 3 ] `internal/z3/health.go` — Z3 solver health monitoring: memory usage, solver st...
 - #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
+- #221: [milestone Milestone 3 ] `internal/symbolic` — symbolic execution engine: wazero bytecode tracer that e...
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
