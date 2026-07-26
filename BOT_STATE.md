@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-26 08:42 UTC by patrol_
+_Last updated: 2026-07-26 09:02 UTC by patrol_
 
 ## Queue
 
@@ -9,17 +9,17 @@ _Last updated: 2026-07-26 08:42 UTC by patrol_
 | Pending | 2 |
 | Active (running/reviewing) | 0 |
 | Blocked | 1 |
-| Completed/Merged (all time) | 164 |
+| Completed/Merged (all time) | 165 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
+| #241 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-26 |
 | #239 | [milestone Milestone 3] Create basic verify handler infra... | merged/auto_closed_resolved | 2026-07-25 |
 | #238 | [Milestone 3 Phase 1a] Core symbolic execution engine inf... | completed/complexity_gate_split | 2026-07-25 |
 | #221 | [milestone Milestone 3 ] `internal/symbolic` — symbolic... | completed/complexity_gate_split | 2026-07-25 |
 | #233 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-25 |
-| #229 | Fix WasmAgent/symkernel#228 ([milestone Milestone 3 ] Dep... | completed/complexity_gate_split | 2026-07-25 |
 
 ## Waiting for Human
 
