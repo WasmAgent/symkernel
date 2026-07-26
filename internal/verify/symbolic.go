@@ -1,0 +1,64 @@
+// Package verify provides the symbolic and SMT verification primitives used
+// by symkerneld. The symbolic types in this file define the Milestone 3
+// contract that endpoint handlers wire against; Run is a stub until the
+// full Z3-backed symbolic exploration engine lands.
+package verify
+
+import (
+	"context"
+	"errors"
+
+	"github.com/google/uuid"
+)
+
+// ErrNotImplemented is returned by Run until the Z3-backed symbolic
+// exploration engine is implemented. Endpoint handlers should still wire
+// Run so the contract is exercised end-to-end while the engine matures.
+var ErrNotImplemented = errors.New("symbolic verification not implemented")
+
+// SymbolicInput is the request payload for symbolic verification: a base64
+// WebAssembly binary, the entry-point export to explore, and its arguments.
+type SymbolicInput struct {
+	// WasmBinary is the base64-encoded WebAssembly module to explore.
+	WasmBinary string `json:"wasmBinary"`
+	// Entry names the export (function) to begin symbolic execution from.
+	Entry string `json:"entry"`
+	// Args are the initial argument values passed to Entry.
+	Args []any `json:"args"`
+}
+
+// SymbolicPath describes one feasible execution path discovered during
+// symbolic exploration: the guarding path constraint (SMT2) and a
+// satisfying model.
+type SymbolicPath struct {
+	// Constraints is the SMT2 path constraint that guards this path.
+	Constraints string `json:"constraints"`
+	// Model is a satisfying assignment for Constraints, keyed by symbol.
+	Model map[string]any `json:"model"`
+}
+
+// SymbolicResult holds the set of explored paths and bookkeeping fields.
+type SymbolicResult struct {
+	// Paths is the set of feasible execution paths discovered.
+	Paths []SymbolicPath `json:"paths"`
+	// Explored is the total number of paths considered (feasible or not).
+	Explored int `json:"explored"`
+	// DecisionID is the per-call UUID, following the GENAI_SEMCONV field
+	// naming used across the WasmAgent ecosystem. Every response carries
+	// one for traceability — see CLAUDE.md "Bot instructions".
+	DecisionID string `json:"decision_id"`
+}
+
+// Run executes symbolic exploration of in.WasmBinary starting at in.Entry.
+//
+// The engine is not yet implemented: Run always returns ErrNotImplemented
+// alongside a result whose DecisionID is populated with a fresh UUID, so
+// endpoint handlers can call it today and surface a decision_id to callers
+// while the Z3-backed implementation lands. When ctx is cancelled the stub
+// still returns the same sentinel rather than ctx.Err(), since no work is
+// performed.
+func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
+	_ = ctx // no work performed by the stub; reserved for the real engine
+	_ = in
+	return SymbolicResult{DecisionID: uuid.NewString()}, ErrNotImplemented
+}
