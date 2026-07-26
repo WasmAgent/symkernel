@@ -54,6 +54,12 @@ wasmagent-js / wasmagent-py / bscode
 
 Every response carries a `decision_id` (UUID) and `evalMs` for traceability, following GENAI_SEMCONV field naming to align with `@wasmagent/otel-exporter`.
 
+## Z3 SMT solver
+
+The `POST /v1/verify/z3` and symbolic-verification endpoints rely on the [Z3](https://github.com/Z3Prover/z3) SMT solver. symkerneld does **not** link Z3 via CGO: `internal/verify/z3.go` shells out to the `z3` executable in SMTLIB2 interactive mode (`z3 -in`). This keeps the Go build free of any native `libz3` dependency — `go build ./...` succeeds without `libz3-dev` installed.
+
+**Runtime requirement:** the `z3` executable (Z3 **4.13.x** or later) must be on `PATH` on every host running `symkerneld`. Install it via your package manager (`apt-get install z3` / `brew install z3`) or from the [Z3 releases page](https://github.com/Z3Prover/z3/releases), then verify with `z3 --version`.
+
 ## Composed Policies
 
 Composed policies chain multiple verification tiers (CEL → wazero → Z3) into a single
