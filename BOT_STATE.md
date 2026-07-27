@@ -1,13 +1,13 @@
 # Bot State
 
-_Last updated: 2026-07-27 19:43 UTC by patrol_
+_Last updated: 2026-07-27 20:22 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
 | Pending | 1 |
-| Active (running/reviewing) | 1 |
+| Active (running/reviewing) | 0 |
 | Blocked | 0 |
 | Completed/Merged (all time) | 168 |
 
@@ -23,7 +23,6 @@ _Last updated: 2026-07-27 19:43 UTC by patrol_
 
 ## Waiting for Human
 
-- #246: [milestone Milestone 3] Symbolic execution engine core - path exploration, constraint generation, and Z3 model extraction
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 
 ---
