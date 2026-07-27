@@ -21,6 +21,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /v1/verify/cel", cellib.Handler())
 	mux.Handle("POST /v1/verify/z3", verify.Handler(&verify.Z3Solver{}))
 	mux.Handle("POST /v1/verify/criterion", criterion.Handler())
+	mux.Handle("POST /v1/verify/symbolic", verify.SymbolicHandler())
 
 	orchestrator.NewRouter().RegisterRoutes(mux)
 	audit.New().RegisterRoutes(mux)
