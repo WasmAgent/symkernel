@@ -1,14 +1,14 @@
 # Bot State
 
-_Last updated: 2026-07-27 05:09 UTC by patrol_
+_Last updated: 2026-07-27 05:52 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 2 |
-| Active (running/reviewing) | 0 |
-| Blocked | 1 |
+| Pending | 1 |
+| Active (running/reviewing) | 1 |
+| Blocked | 0 |
 | Completed/Merged (all time) | 168 |
 
 ## Recent Activity (last 5)
@@ -24,7 +24,6 @@ _Last updated: 2026-07-27 05:09 UTC by patrol_
 ## Waiting for Human
 
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
-- #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
