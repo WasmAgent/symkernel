@@ -1,13 +1,13 @@
 # Bot State
 
-_Last updated: 2026-07-26 23:59 UTC by patrol_
+_Last updated: 2026-07-27 01:26 UTC by patrol_
 
 ## Queue
 
 | State | Count |
 |---|---|
-| Pending | 1 |
-| Active (running/reviewing) | 1 |
+| Pending | 2 |
+| Active (running/reviewing) | 0 |
 | Blocked | 1 |
 | Completed/Merged (all time) | 167 |
 
@@ -23,6 +23,7 @@ _Last updated: 2026-07-26 23:59 UTC by patrol_
 
 ## Waiting for Human
 
+- #244: Bump pinned @wasmagent/protocol version: vendored constraint-ir.schema.json is stale
 - #226: [milestone Milestone 3 ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs c...
 - #223: [milestone Milestone 3 ] `POST /v1/verify/symbolic` — symbolic execution endpoint: `{\
 
