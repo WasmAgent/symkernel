@@ -201,3 +201,28 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] API gateway adaptation — `internal/gateway`: adaptive routing logic: `ShouldRouteToSMT(criterion Criterion) bool` heuristics based on constraint complexity (nesting depth, quantifier presence) to automatically choose between CEL, wazero, and Z3 endpoints; export decision metrics to OpenTelemetry for routing observability
 - [ ] Constraint violation refinement — `internal/refinement`: `RefineViolation(violation ConstraintViolation, counterexample map[string]any) (RefinedViolation, error)` enriches violation hints with concrete counterexample values from Z3 model; improves developer experience for policy debugging
 - [ ] README update — SMT quickstart: `docker run -f Dockerfile.z3`, example SMT constraint request, interpretation of sat/unsat/unknown results, counterexample walkthrough; migration guide from Phase 0 CEL-only deployments
+
+Looking at the symkernel roadmap, I need to identify the natural next capability after completing the wazero sandbox integration. The project aims to provide a "CEL + wazero + Z3 three-tier symbolic reasoning backend," and Milestone 2 covers wazero. The logical next step is completing the third tier with Z3 SMT solver integration.
+
+Here's Milestone 12:
+
+---
+
+## Milestone 12 — Z3 SMT Solver Integration (Phase 1b)
+
+> Mathematical verification: symbolic path exploration and constraint solving for complex policies.
+> Completes the three-tier architecture: CEL (fast declarative) → wazero (sandboxed code) → Z3 (mathematical proofs).
+
+- [ ] `internal/z3` — Z3 SMT solver bindings via Cgo: `CheckSMT(expr string, context map[string]any) (sat bool, model map[string]any, error)` with per-request timeout and memory limits; supports linear arithmetic, bitvectors, and quantifier-free theories for Phase 1b
+- [ ] `internal/z3solver` — Go wrapper layer: translates cel-go AST to SMT-LIB format, handles variable typing, manages solver context lifecycle, and provides graceful degradation when Z3 is unavailable
+- [ ] `POST /v1/verify/smt` — SMT verification endpoint: `{"input":{"constraints":["..."],"context":{...},"timeoutMs":5000}}` → `{"result":{"sat":true|false|unknown,"model":{...},"decision_id":"uuid","solveMs":42}}; supports incremental solving (push/pop constraints)
+- [ ] `POST /v1/verify/hybrid` — Multi-tier decision endpoint: automatically routes requests to CEL → wazero → Z3 based on policy complexity heuristics (expression depth, operator types, data dependencies); returns tier used in response metadata
+- [ ] `internal/caching` — LRU cache for verification results: keyed by expression hash and context fingerprint; configurable TTL via `SYMKERNEL_CACHE_TTL`; cache metrics (hit rate, evictions) exposed in `/health` response
+- [ ] `bench/smt-bench` — SMT solver performance harness: compare Z3 against CEL+wazero on constraint satisfaction problems from `bscode/fixtures/bench-v0/smt-tasks/`; output solve time, memory usage, and satisfiability rate
+- [ ] `deploy/Dockerfile.z3` — Extended multi-stage build: adds `z3` dependency via `apt-get`, builds static Go binary with Cgo enabled, final stage includes `libz3.so` and sets `LD_LIBRARY_PATH`
+- [ ] `docs/architecture.md` — Three-tier decision flow documentation: when each tier excels, complexity heuristics, fallback strategies, and operational guidance for capacity planning per tier
+- [ ] `POST /v1/verify/batch` — Batch evaluation endpoint: `{"requests":[...]}` → `{"results":[...]}` with parallel execution per-tier; supports `prefer_parallel: true` for independent requests and `fail_fast: false` for partial-success handling
+- [ ] `internal/metrics` — Prometheus metrics export: tier-specific latency histograms, cache hit/miss counters, Z3 memory usage gauge, and solver timeout rate; exposed at `/metrics` endpoint for operational visibility
+- [ ] api/openapi.yaml — Phase 1b schema additions: SMT constraint format, model response shape, hybrid routing metadata, and batch error handling with partial-success semantics
+
+---
