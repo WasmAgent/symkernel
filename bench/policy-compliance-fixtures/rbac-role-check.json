@@ -1,0 +1,38 @@
+{
+  "id": "rbac-role-check",
+  "title": "Role-based access control (disjunctive membership)",
+  "category": "authorization",
+  "complexity": "simple",
+  "description": "A write operation is permitted only when the principal holds one of the privileged roles in the allow-set {admin, editor}. This fixture introduces a disjunction over an enumerated domain, exercising the membership-check path that symbolic execution must split into one branch per allow-set member plus a default deny branch.",
+  "policy_rules": [
+    "The principal's role MUST be a member of the allow-set {admin, editor} to write.",
+    "Any role outside the allow-set MUST be denied write access."
+  ],
+  "expected_behavior": "Write is allowed for role == admin or role == editor and denied for every other role. The allow-set has two members, so the symbolic explorer must enumerate three feasible paths (admin, editor, other). In the SMT-LIB encoding, roles are mapped to integer codes: admin=1, editor=2, all other roles=0.",
+  "paths": [
+    { "id": "allow-admin", "condition": "role == \"admin\"", "verdict": "allow", "feasible": true, "witness": { "role": "admin" } },
+    { "id": "allow-editor", "condition": "role == \"editor\"", "verdict": "allow", "feasible": true, "witness": { "role": "editor" } },
+    { "id": "deny-other", "condition": "role != \"admin\" && role != \"editor\"", "verdict": "deny", "feasible": true, "witness": { "role": "viewer" } }
+  ],
+  "representations": {
+    "cel": {
+      "endpoint": "POST /v1/verify/criterion",
+      "verify_method": "cel_expr",
+      "expr": "role == \"admin\" || role == \"editor\"",
+      "context_template": { "role": "" }
+    },
+    "smt2": {
+      "endpoint": "POST /v1/verify/z3",
+      "declarations": "(declare-const role Int)",
+      "policy_assertion": "(assert (or (= role 1) (= role 2)))",
+      "expected_check_sat": "sat",
+      "notes": "Role codes: admin=1, editor=2. The disjunction is satisfiable (e.g. role=1)."
+    }
+  },
+  "samples": [
+    { "name": "admin", "context": { "role": "admin" }, "expected_cel": true, "expected_path": "allow-admin" },
+    { "name": "editor", "context": { "role": "editor" }, "expected_cel": true, "expected_path": "allow-editor" },
+    { "name": "viewer", "context": { "role": "viewer" }, "expected_cel": false, "expected_path": "deny-other" },
+    { "name": "empty", "context": { "role": "" }, "expected_cel": false, "expected_path": "deny-other" }
+  ]
+}

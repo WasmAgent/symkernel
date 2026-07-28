@@ -1,0 +1,43 @@
+{
+  "id": "data-residency-geo",
+  "title": "Data-residency / geo-fencing compliance (conjunctive predicate set with negated membership)",
+  "category": "data-protection",
+  "complexity": "complex",
+  "description": "A record may be persisted only when ALL of the following hold: it is stored in the EU residency region, it is not in a blocked-country set, and it is encrypted at rest. This fixture exercises a conjunction of heterogeneous predicates (equality on an enumerated region, negated membership over a country blocklist, and a boolean flag), which is the most predicate-dense policy in the set and stresses both path enumeration and the solver's conjunction reasoning.",
+  "policy_rules": [
+    "region MUST equal \"EU\".",
+    "country MUST NOT be a member of the blocked set {\"X\", \"Y\"}.",
+    "encrypted MUST be true.",
+    "The record is allowed only when ALL three rules hold simultaneously."
+  ],
+  "expected_behavior": "The record is allowed only when region == EU AND country is not blocked AND encrypted == true. Each predicate fails independently, so there are three deny sub-paths (wrong region, blocked country, unencrypted) in addition to the single allow path. In the SMT-LIB encoding, region is mapped to an integer code (EU=1) and country to integer codes (blocked: X=10, Y=11).",
+  "paths": [
+    { "id": "allow-compliant", "condition": "region == \"EU\" && !(country in [\"X\", \"Y\"]) && encrypted == true", "verdict": "allow", "feasible": true, "witness": { "region": "EU", "country": "DE", "encrypted": true } },
+    { "id": "deny-wrong-region", "condition": "region != \"EU\" && !(country in [\"X\", \"Y\"]) && encrypted == true", "verdict": "deny", "feasible": true, "witness": { "region": "US", "country": "DE", "encrypted": true } },
+    { "id": "deny-blocked-country", "condition": "region == \"EU\" && country in [\"X\", \"Y\"] && encrypted == true", "verdict": "deny", "feasible": true, "witness": { "region": "EU", "country": "X", "encrypted": true } },
+    { "id": "deny-unencrypted", "condition": "region == \"EU\" && !(country in [\"X\", \"Y\"]) && encrypted == false", "verdict": "deny", "feasible": true, "witness": { "region": "EU", "country": "DE", "encrypted": false } }
+  ],
+  "representations": {
+    "cel": {
+      "endpoint": "POST /v1/verify/criterion",
+      "verify_method": "cel_expr",
+      "expr": "region == \"EU\" && !(country in [\"X\", \"Y\"]) && encrypted == true",
+      "context_template": { "region": "", "country": "", "encrypted": false }
+    },
+    "smt2": {
+      "endpoint": "POST /v1/verify/z3",
+      "declarations": "(declare-const region Int)(declare-const country Int)(declare-const encrypted Bool)",
+      "policy_assertion": "(assert (and (= region 1) (not (= country 10)) (not (= country 11)) encrypted))",
+      "expected_check_sat": "sat",
+      "notes": "Conjunction over equality, two negated equalities, and a boolean; region EU=1, blocked countries X=10/Y=11. Satisfiable (e.g. region=1, country=5, encrypted=true)."
+    }
+  },
+  "samples": [
+    { "name": "eu-de-encrypted", "context": { "region": "EU", "country": "DE", "encrypted": true }, "expected_cel": true, "expected_path": "allow-compliant" },
+    { "name": "eu-fr-encrypted", "context": { "region": "EU", "country": "FR", "encrypted": true }, "expected_cel": true, "expected_path": "allow-compliant" },
+    { "name": "us-de-encrypted", "context": { "region": "US", "country": "DE", "encrypted": true }, "expected_cel": false, "expected_path": "deny-wrong-region" },
+    { "name": "eu-x-encrypted", "context": { "region": "EU", "country": "X", "encrypted": true }, "expected_cel": false, "expected_path": "deny-blocked-country" },
+    { "name": "eu-y-encrypted", "context": { "region": "EU", "country": "Y", "encrypted": true }, "expected_cel": false, "expected_path": "deny-blocked-country" },
+    { "name": "eu-de-plaintext", "context": { "region": "EU", "country": "DE", "encrypted": false }, "expected_cel": false, "expected_path": "deny-unencrypted" }
+  ]
+}

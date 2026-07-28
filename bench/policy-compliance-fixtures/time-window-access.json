@@ -1,0 +1,41 @@
+{
+  "id": "time-window-access",
+  "title": "Business-hours maintenance window (nested boolean + arithmetic bounds)",
+  "category": "resource-access",
+  "complexity": "moderate",
+  "description": "A privileged maintenance action is permitted only during business hours (09:00-17:00 UTC, inclusive) on a weekday (Monday-Friday). This fixture introduces nested boolean conjunction over arithmetic range checks, exercising the solver's handling of conjunctive bound constraints and the path explosion that comes from combining two independent ranged predicates.",
+  "policy_rules": [
+    "hour MUST be within the inclusive range [9, 17].",
+    "day MUST be within the inclusive range [1, 5], where 1=Monday ... 5=Friday.",
+    "The action is allowed only when BOTH rules hold simultaneously."
+  ],
+  "expected_behavior": "The action is allowed when 9 <= hour <= 17 AND 1 <= day <= 5, and denied otherwise. Each predicate fails independently, producing three deny sub-paths (off-hours, weekend, both) in addition to the single allow path. day is encoded as an integer 1..7 (1=Monday ... 7=Sunday) in both the CEL context and the SMT model.",
+  "paths": [
+    { "id": "allow-business-hours", "condition": "hour >= 9 && hour <= 17 && day >= 1 && day <= 5", "verdict": "allow", "feasible": true, "witness": { "hour": 12, "day": 3 } },
+    { "id": "deny-off-hours", "condition": "(hour < 9 || hour > 17) && day >= 1 && day <= 5", "verdict": "deny", "feasible": true, "witness": { "hour": 23, "day": 3 } },
+    { "id": "deny-weekend", "condition": "hour >= 9 && hour <= 17 && (day < 1 || day > 5)", "verdict": "deny", "feasible": true, "witness": { "hour": 12, "day": 7 } }
+  ],
+  "representations": {
+    "cel": {
+      "endpoint": "POST /v1/verify/criterion",
+      "verify_method": "cel_expr",
+      "expr": "hour >= 9 && hour <= 17 && day >= 1 && day <= 5",
+      "context_template": { "hour": 0, "day": 1 }
+    },
+    "smt2": {
+      "endpoint": "POST /v1/verify/z3",
+      "declarations": "(declare-const hour Int)(declare-const day Int)",
+      "policy_assertion": "(assert (and (>= hour 9) (<= hour 17) (>= day 1) (<= day 5)))",
+      "expected_check_sat": "sat",
+      "notes": "Conjunction of four bound constraints; satisfiable (e.g. hour=12, day=3)."
+    }
+  },
+  "samples": [
+    { "name": "wed-noon", "context": { "hour": 12, "day": 3 }, "expected_cel": true, "expected_path": "allow-business-hours" },
+    { "name": "mon-open", "context": { "hour": 9, "day": 1 }, "expected_cel": true, "expected_path": "allow-business-hours" },
+    { "name": "fri-close", "context": { "hour": 17, "day": 5 }, "expected_cel": true, "expected_path": "allow-business-hours" },
+    { "name": "late-night", "context": { "hour": 23, "day": 3 }, "expected_cel": false, "expected_path": "deny-off-hours" },
+    { "name": "saturday", "context": { "hour": 12, "day": 6 }, "expected_cel": false, "expected_path": "deny-weekend" },
+    { "name": "sunday-night", "context": { "hour": 2, "day": 7 }, "expected_cel": false, "expected_path": "deny-off-hours" }
+  ]
+}

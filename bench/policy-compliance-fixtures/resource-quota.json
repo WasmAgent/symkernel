@@ -1,0 +1,37 @@
+{
+  "id": "resource-quota",
+  "title": "Resource quota / capacity-arithmetic gate",
+  "category": "resource-access",
+  "complexity": "moderate",
+  "description": "A provisioning request is accepted only when current usage plus the requested amount stays within the tenant's quota limit. This fixture introduces linear integer arithmetic over three variables, exercising the solver's ability to reason about additive capacity rather than simple equality/membership.",
+  "policy_rules": [
+    "used + requested MUST NOT exceed the tenant quota limit.",
+    "The request MUST be denied when used + requested > limit."
+  ],
+  "expected_behavior": "The request is allowed when (used + requested) <= limit and denied when (used + requested) > limit. The boundary case (used + requested == limit) is allowed. Both branches are feasible: a small request against a fresh tenant is allowed; an over-large request is denied.",
+  "paths": [
+    { "id": "allow-within-quota", "condition": "used + requested <= limit", "verdict": "allow", "feasible": true, "witness": { "used": 30, "requested": 20, "limit": 100 } },
+    { "id": "deny-over-quota", "condition": "used + requested > limit", "verdict": "deny", "feasible": true, "witness": { "used": 90, "requested": 20, "limit": 100 } }
+  ],
+  "representations": {
+    "cel": {
+      "endpoint": "POST /v1/verify/criterion",
+      "verify_method": "cel_expr",
+      "expr": "used + requested <= limit",
+      "context_template": { "used": 0, "requested": 0, "limit": 0 }
+    },
+    "smt2": {
+      "endpoint": "POST /v1/verify/z3",
+      "declarations": "(declare-const used Int)(declare-const requested Int)(declare-const limit Int)",
+      "policy_assertion": "(assert (<= (+ used requested) limit))",
+      "expected_check_sat": "sat",
+      "notes": "Linear arithmetic over non-negative integers; satisfiable (e.g. used=0, requested=0, limit=1)."
+    }
+  },
+  "samples": [
+    { "name": "well-within", "context": { "used": 30, "requested": 20, "limit": 100 }, "expected_cel": true, "expected_path": "allow-within-quota" },
+    { "name": "exactly-at-limit", "context": { "used": 80, "requested": 20, "limit": 100 }, "expected_cel": true, "expected_path": "allow-within-quota" },
+    { "name": "one-over-limit", "context": { "used": 81, "requested": 20, "limit": 100 }, "expected_cel": false, "expected_path": "deny-over-quota" },
+    { "name": "far-over-limit", "context": { "used": 90, "requested": 50, "limit": 100 }, "expected_cel": false, "expected_path": "deny-over-quota" }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "auth-minimum-age",
+  "title": "Minimum-age authorization gate",
+  "category": "authorization",
+  "complexity": "simple",
+  "description": "A principal may access a resource only if their declared age is at least the minimum threshold (18). This is the smallest meaningful policy: a single relational condition with two reachable branches (grant / deny). It is the baseline against which the more complex fixtures are compared.",
+  "policy_rules": [
+    "The principal's age MUST be greater than or equal to 18 to be authorized.",
+    "Any age below 18 MUST be denied regardless of other attributes."
+  ],
+  "expected_behavior": "An access request evaluates to allow when age >= 18 and to deny when age < 18. The boundary value age == 18 must be allowed (closed lower bound). Both branches are independently feasible, so a symbolic explorer must enumerate two paths and a concrete tester must observe both verdicts.",
+  "paths": [
+    { "id": "allow", "condition": "age >= 18", "verdict": "allow", "feasible": true, "witness": { "age": 18 } },
+    { "id": "deny", "condition": "age < 18", "verdict": "deny", "feasible": true, "witness": { "age": 12 } }
+  ],
+  "representations": {
+    "cel": {
+      "endpoint": "POST /v1/verify/criterion",
+      "verify_method": "cel_expr",
+      "expr": "age >= 18",
+      "context_template": { "age": 0 }
+    },
+    "smt2": {
+      "endpoint": "POST /v1/verify/z3",
+      "declarations": "(declare-const age Int)",
+      "policy_assertion": "(assert (>= age 18))",
+      "expected_check_sat": "sat",
+      "notes": "Integer age; the policy assertion is the allow-path condition, so check-sat is sat with model age=18."
+    }
+  },
+  "samples": [
+    { "name": "adult", "context": { "age": 25 }, "expected_cel": true, "expected_path": "allow" },
+    { "name": "boundary-min", "context": { "age": 18 }, "expected_cel": true, "expected_path": "allow" },
+    { "name": "one-below-min", "context": { "age": 17 }, "expected_cel": false, "expected_path": "deny" },
+    { "name": "minor", "context": { "age": 12 }, "expected_cel": false, "expected_path": "deny" }
+  ]
+}
