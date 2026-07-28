@@ -226,3 +226,17 @@ Here's Milestone 12:
 - [ ] api/openapi.yaml — Phase 1b schema additions: SMT constraint format, model response shape, hybrid routing metadata, and batch error handling with partial-success semantics
 
 ---
+
+## Milestone 3 — Z3 Symbolic Reasoning Engine (Phase 1b)
+
+> Second differentiator: full SMT constraint solving for complex verification scenarios.
+
+- [ ] `internal/z3` — Z3 Go bindings via `github.com/ryan-j Chapman/go-z3`: `SolveConstraints(constraints string, context map[string]any) (Solution, error)` with configurable solver timeout and tactic selection (QF_LIA, QF_BV, AUFLIA)
+- [ ] `internal/symbolic` — symbolic execution coordinator: orchestrates CEL → wazero → Z3 pipeline, translates CEL AST to Z3 SMT-LIB format, manages variable bindings across execution traces
+- [ ] `POST /v1/verify/smt` — SMT-solving endpoint: `{"constraints":"...","context":{...},"tactic":"QF_LIA"}` → `{"sat":"UNSAT","model":{},"decision_id":"uuid","solveMs":12.3}`; supports incremental solving with `push`/`pop` for complex queries
+- [ ] `POST /v1/verify/path` — path exploration endpoint: `{"wasm_module":"base64","entry_function":"fn","inputs":[{...}]}` → `{"paths":[{"id":"...","constraints":"...","feasible":true,"counterexample":{...}}],"decision_id":"uuid"}`; enumerates feasible execution paths using symbolic execution
+- [ ] `internal/cache` — LRU cache for compiled Z3 solvers and CEL programs: configurable via `SYMKERNEL_CACHE_SIZE_MB` env var, reduces cold-start latency by ~40%
+- [ ] `internal/otel` — span attributes for Z3 operations: `solver.tactic`, `solver.result`, `solver.decls`, `solver.assertions`; emit `symkernel.solve.duration` histogram metric
+- [ ] `bench/smt-comparison` — benchmark suite comparing pure CEL vs CEL+Z3 hybrid on 20 complex constraint scenarios from `bscode/fixtures/bench-v1/smt-tasks/`; output accuracy/latency table
+- [ ] `api/openapi.yaml` — update with Phase 1b endpoints, SMT-LIB constraint format examples, path exploration request/response schemas
+- [ ] README extension — Z3 quickstart section with constraint-solving example, path enumeration walkthrough, and performance tuning guide
