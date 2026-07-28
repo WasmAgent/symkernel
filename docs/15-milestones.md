@@ -185,3 +185,19 @@ This milestone transforms symkernel from isolated verification endpoints into an
 - [ ] `bench/symbolic-comparison.md` — comparative analysis: symbolic execution vs concrete testing on 6 verification tasks from `policy-compliance` fixtures; report path coverage and constraint solving time
 - [ ] `api/openapi.yaml` — extend spec with Phase 1b endpoints: add SMT-LIB constraint examples, symbolic execution request/response schemas, error codes for solver timeouts/memory limits
 - [ ] Deploy updates: `deploy/wrangler.toml` memory allocation increase for Z3 worker pool, `deploy/Dockerfile` multi-stage build with Z3 library compilation stage, health check endpoint for solver readiness
+
+## Milestone 12 — Symbolic Reasoning Core: Z3 Integration (Phase 1b)
+
+> Third tier completion: formal verification and constraint solving.
+> Goal: integrate Z3 SMT solver for path feasibility, constraint refinement, and counterexample generation.
+
+- [ ] `internal/z3` — CGO bindings to Z3 4.13+: `Solve(constraints string, model map[string]any) (sat bool, model map[string]any, error)` with SMT-LIB2 parsing; fallback to pure-Go solver when CGO unavailable via build tag `!z3_cgo`
+- [ ] `internal/constraint` — constraint IR translator: `TranslateToSMT(criterion ConstraintIR) (string, error)` converting the vendored `constraint-ir.schema.json` into Z3 SMT-LIB2 format with type-aware encoding for integers, strings, and booleans
+- [ ] `POST /v1/verify/smt` — SMT solver endpoint: `{"input":{"constraints":"...","model":{...}}}` → `{"result":{"sat":true|false|unknown,"model":{...},"core":[...]},"decision_id":"uuid","solveMs":12.3}`; unsat core extraction for constraint debugging
+- [ ] `internal/symbolic` — path exploration engine: `ExplorePaths(wasm []byte, inputs []SymInput) ([]PathResult, error)` using wazero + Z3 to enumerate feasible execution paths through WebAssembly modules; returns reachable states and path conditions
+- [ ] Constraint synthesis helpers — `internal/synthesis`: `SynthesizeInvariant(precondition, postcondition string, loopBody []byte) (string, error)` combining symbolic execution with Z3 to suggest loop invariants; useful for policy verification
+- [ ] `bench/smt-comparison/` — solver evaluation harness: compare Z3 against `cel_expr` and existing keyword/n-gram baseline on the 12 `formal-verification` tasks from `bscode/fixtures/bench-v1/tasks/`; measure solve time, memory footprint, and counterexample quality
+- [ ] `deploy/Dockerfile.z3` — variant image with Z3 native libraries: `apt install z3 libz3-dev` in builder stage, copy `libz3.so` to distroless image via `--scratch` intermediate layer; non-Z3 variant remains default for Phase 0/1a compatibility
+- [ ] API gateway adaptation — `internal/gateway`: adaptive routing logic: `ShouldRouteToSMT(criterion Criterion) bool` heuristics based on constraint complexity (nesting depth, quantifier presence) to automatically choose between CEL, wazero, and Z3 endpoints; export decision metrics to OpenTelemetry for routing observability
+- [ ] Constraint violation refinement — `internal/refinement`: `RefineViolation(violation ConstraintViolation, counterexample map[string]any) (RefinedViolation, error)` enriches violation hints with concrete counterexample values from Z3 model; improves developer experience for policy debugging
+- [ ] README update — SMT quickstart: `docker run -f Dockerfile.z3`, example SMT constraint request, interpretation of sat/unsat/unknown results, counterexample walkthrough; migration guide from Phase 0 CEL-only deployments
