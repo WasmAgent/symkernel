@@ -246,3 +246,17 @@ Based on the symkernel context provided (CEL + wazero + Z3 three-tier symbolic r
 - [ ] `internal/trustchain` — AgentBOM integration: fetch and validate WasmAgent AgentBOM artifacts for WASM modules before execution; verify signature against `@wasmagent/protocol` trust anchor; reject unsigned/revoked modules with 403
 - [ ] `deploy/kustomize/` — Kubernetes deployment manifests: Deployment, Service, ConfigMap, and HorizontalPodAutosser (2–10 replicas) for production rollouts; includes PodDisruptionBudget and resource limits (memory: 256Mi, CPU: 500m)
 - [ ] README — Production operations guide: Kubernetes rollout procedure, cache warm-up strategy, SMT solver tuning guide, and incident runbook for high-latency SMT queries
+
+## Milestone 12 — Symbolic Reasoning with Z3 SMT Solver (Phase 2)
+
+> Deep verification: mathematical constraint solving and symbolic path exploration.
+> Goal: enable true symbolic execution with SMT-backed path feasibility analysis.
+
+- [ ] `internal/z3` — Z3 (SMT solver) integration via CGO: `Solve(ctx *Context, assertions string, model *Model) (sat bool, model map[string]any, error)` wrapping Z3's C API with per-request memory limits and solver timeout
+- [ ] `internal/symbolic` — Symbolic execution engine: `ExplorePaths(module []byte, entrypoint string, constraints []string) ([]PathResult, error)` using wazero's instruction trace instrumentation + Z3 path feasibility pruning; track symbolic registers and memory concretization points
+- [ ] `POST /v1/verify/smt` — SMT query endpoint: `{"assertions":["(> x 10)","(< y 20)"],"context":{"x":"int","y":"int"},"timeoutMs":5000}` → `{"sat":true,"model":{"x":15,"y":18},"decision_id":"..."}`; supports quantifiers, bitvectors, and arrays
+- [ ] `POST /v1/verify/symbolic` — Symbolic WASM execution endpoint: `{"module":"base64...","entrypoint":"main","maxDepth":100,"pruneInfeasible":true}` → `{"paths":[{"id":"...","feasible":true,"constraints":[...],"output":...}],"explored":42,"pruned":7,"decision_id":"..."}`
+- [ ] `internal/symbolic/cache` — Decision cache for Z3 queries: LRU cache keyed by assertion hash; reduces redundant solver calls; configurable max entries via `SYMKERNEL_Z3_CACHE_SIZE`
+- [ ] `deploy/Dockerfile.z3` — Extended multi-stage build with Z3 library compilation stage; statically links Z3 for distroless compatibility; optional `BUILD_Z3_FROM_SOURCE` env var for version pinning
+- [ ] `bench/symbolic/` — Symbolic execution benchmark suite: run against curated WASM snippets from `wasmagent/symbolic-fixtures` (loops, recursion, data-dependent branches); output table of path explosion rates, solver time, and cache hit ratios
+- [ ] `internal/symbolic/taint` — Taint analysis integration: track data flow from untrusted inputs to security-sensitive operations; combine with Z3 to prove tainted values cannot violate constraints; `POST /v1/verify/taint` endpoint for security policy validation
