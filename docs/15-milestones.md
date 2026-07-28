@@ -227,16 +227,22 @@ Here's Milestone 12:
 
 ---
 
-## Milestone 3 — Z3 Symbolic Reasoning Engine (Phase 1b)
+Based on the symkernel context provided (CEL + wazero + Z3 three-tier symbolic reasoning backend), and looking at the natural progression from the foundation work, here's Milestone 12:
 
-> Second differentiator: full SMT constraint solving for complex verification scenarios.
+---
 
-- [ ] `internal/z3` — Z3 Go bindings via `github.com/ryan-j Chapman/go-z3`: `SolveConstraints(constraints string, context map[string]any) (Solution, error)` with configurable solver timeout and tactic selection (QF_LIA, QF_BV, AUFLIA)
-- [ ] `internal/symbolic` — symbolic execution coordinator: orchestrates CEL → wazero → Z3 pipeline, translates CEL AST to Z3 SMT-LIB format, manages variable bindings across execution traces
-- [ ] `POST /v1/verify/smt` — SMT-solving endpoint: `{"constraints":"...","context":{...},"tactic":"QF_LIA"}` → `{"sat":"UNSAT","model":{},"decision_id":"uuid","solveMs":12.3}`; supports incremental solving with `push`/`pop` for complex queries
-- [ ] `POST /v1/verify/path` — path exploration endpoint: `{"wasm_module":"base64","entry_function":"fn","inputs":[{...}]}` → `{"paths":[{"id":"...","constraints":"...","feasible":true,"counterexample":{...}}],"decision_id":"uuid"}`; enumerates feasible execution paths using symbolic execution
-- [ ] `internal/cache` — LRU cache for compiled Z3 solvers and CEL programs: configurable via `SYMKERNEL_CACHE_SIZE_MB` env var, reduces cold-start latency by ~40%
-- [ ] `internal/otel` — span attributes for Z3 operations: `solver.tactic`, `solver.result`, `solver.decls`, `solver.assertions`; emit `symkernel.solve.duration` histogram metric
-- [ ] `bench/smt-comparison` — benchmark suite comparing pure CEL vs CEL+Z3 hybrid on 20 complex constraint scenarios from `bscode/fixtures/bench-v1/smt-tasks/`; output accuracy/latency table
-- [ ] `api/openapi.yaml` — update with Phase 1b endpoints, SMT-LIB constraint format examples, path exploration request/response schemas
-- [ ] README extension — Z3 quickstart section with constraint-solving example, path enumeration walkthrough, and performance tuning guide
+## Milestone 12 — Advanced Symbolic Reasoning & Z3 Integration (Phase 2)
+
+> Unify the three-tier reasoning stack: CEL expressions + WASM execution + SMT constraint solving.
+> Goal: provide true symbolic verification through constraint solving, enabling property-level guarantees beyond static evaluation.
+
+- [ ] `internal/z3` — Go-Z3 bindings bridge: `SolveConstraints(constraints string, model map[string]any) (Solution, error)` wrapping Z3 SMT solver with AST-to-String translation for symbolic variable representation; support linear arithmetic, bitvectors, and array theories
+- [ ] `POST /v1/verify/smt` — SMT constraint solving endpoint: `{"constraints":"...", "model":{...}, "timeout_ms":5000}` → `{"sat":true,"model":{...},"decision_id":"...","solverMs":12}`; include unsat-core extraction for debugging failed constraints
+- [ ] `internal/compose` — Policy composition engine: chain CEL → WASM → Z3 verification stages with conditional short-circuiting; `Compose(policies []Policy, input any) (Report, error)` aggregates decision IDs and stage-level hints
+- [ ] `internal/cache` — Verification result cache: Redis-backed LRU cache keyed by expression hash + context fingerprint; `TTL` configurable per verification tier (CEL: 5m, WASM: 1h, Z3: 24h); cache-invalidation via `PURGE /v1/cache`
+- [ ] `POST /v1/verify/composed` — Composed policy endpoint: `{"policies":[{"stage":"cel","spec":{...}},{"stage":"wasm","spec":{...}},{"stage":"smt","spec":{...}}],"input":{...}}` → `{"ok":true,"report":{"stages":[...],"decision_id":"..."},"evalMs":45}`; each stage includes independent `decision_id` and `hint` fields
+- [ ] `internal/otel` — Extended observability: add SMT solver metrics (`solver_duration_ms`, `sat/unsat/unknown counts`, `constraint_complexity_score`) and cache hit/miss telemetry; export Prometheus metrics at `/metrics`
+- [ ] `bench/smt-bench.md` — SMT solver performance baseline: run 50 constraint problems of varying complexity (linear arithmetic, bitvector operations, array operations) across Z3, CVC5, and Yices2; output comparison table of solve time and memory usage
+- [ ] `internal/trustchain` — AgentBOM integration: fetch and validate WasmAgent AgentBOM artifacts for WASM modules before execution; verify signature against `@wasmagent/protocol` trust anchor; reject unsigned/revoked modules with 403
+- [ ] `deploy/kustomize/` — Kubernetes deployment manifests: Deployment, Service, ConfigMap, and HorizontalPodAutosser (2–10 replicas) for production rollouts; includes PodDisruptionBudget and resource limits (memory: 256Mi, CPU: 500m)
+- [ ] README — Production operations guide: Kubernetes rollout procedure, cache warm-up strategy, SMT solver tuning guide, and incident runbook for high-latency SMT queries
