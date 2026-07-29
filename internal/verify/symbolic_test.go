@@ -2,7 +2,11 @@ package verify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -95,5 +99,59 @@ func TestRun_DecisionIDIsUnique(t *testing.T) {
 	}
 	if a.DecisionID == b.DecisionID {
 		t.Fatalf("DecisionIDs collided: %s", a.DecisionID)
+	}
+}
+
+// TestSymbolicHandler_Placeholder asserts the documented placeholder
+// behaviour: SymbolicHandler always responds 200 OK with the fixed
+// acknowledgement body and a JSON content type, regardless of the request
+// body, so the /v1/verify/symbolic route contract is exercised end-to-end
+// while the symbolic engine matures.
+func TestSymbolicHandler_Placeholder(t *testing.T) {
+	t.Parallel()
+
+	handler := SymbolicHandler()
+
+	// The handler is a placeholder that ignores the body; send a plausible
+	// symbolic request to prove no parsing is attempted yet.
+	body := `{"input":{"wasmBinary":"AGVzbQ==","entry":"_start","args":[]}}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", ct, "application/json")
+	}
+
+	var resp symbolicPlaceholderResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v; body = %s", err, rec.Body.String())
+	}
+	const want = "Symbolic execution endpoint placeholder"
+	if resp.Message != want {
+		t.Errorf("message = %q, want %q", resp.Message, want)
+	}
+}
+
+// TestSymbolicHandler_IgnoresEmptyBody confirms the placeholder responds 200
+// even when no body is posted, matching how the route is exercised through the
+// registered mux (e.g. liveness-style probes).
+func TestSymbolicHandler_IgnoresEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	handler := SymbolicHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 }

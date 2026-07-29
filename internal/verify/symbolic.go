@@ -6,7 +6,9 @@ package verify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 
 	"github.com/google/uuid"
 )
@@ -61,4 +63,31 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 	_ = ctx // no work performed by the stub; reserved for the real engine
 	_ = in
 	return SymbolicResult{DecisionID: uuid.NewString()}, ErrNotImplemented
+}
+
+// symbolicPlaceholderResponse is the fixed acknowledgement body returned by
+// SymbolicHandler while the symbolic execution engine is being built.
+type symbolicPlaceholderResponse struct {
+	Message string `json:"message"`
+}
+
+// SymbolicHandler returns an http.HandlerFunc for the POST /v1/verify/symbolic
+// endpoint.
+//
+// It is a placeholder: the route contract, middleware wiring, and content
+// type are exercised end-to-end, but no symbolic exploration is performed.
+// It always responds 200 OK with
+// {"message": "Symbolic execution endpoint placeholder"} so callers can detect
+// that the route is mounted while the Z3-backed engine behind Run matures. It
+// is a prerequisite for the full symbolic execution logic (issue #245): once
+// Run is implemented, this handler will decode a SymbolicInput, call Run, and
+// shape the SymbolicResult into the response.
+func SymbolicHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(symbolicPlaceholderResponse{
+			Message: "Symbolic execution endpoint placeholder",
+		})
+	}
 }

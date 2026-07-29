@@ -54,4 +54,22 @@ func TestRegisterRoutes(t *testing.T) {
 	if zrec.Code == http.StatusNotFound {
 		t.Errorf("POST /v1/verify/z3 status = 404; route not mounted by RegisterRoutes")
 	}
+
+	// The POST /v1/verify/symbolic placeholder route is mounted and responds
+	// 200 with its placeholder body, proving RegisterRoutes wired it.
+	sreq := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", nil)
+	srec := httptest.NewRecorder()
+	mux.ServeHTTP(srec, sreq)
+	if srec.Code != http.StatusOK {
+		t.Fatalf("POST /v1/verify/symbolic status = %d, want %d; route not mounted or wrong handler; body = %s", srec.Code, http.StatusOK, srec.Body.String())
+	}
+	var sbody struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(srec.Body).Decode(&sbody); err != nil {
+		t.Fatalf("decode symbolic placeholder body: %v; body = %s", err, srec.Body.String())
+	}
+	if sbody.Message != "Symbolic execution endpoint placeholder" {
+		t.Errorf("symbolic message = %q, want %q", sbody.Message, "Symbolic execution endpoint placeholder")
+	}
 }
