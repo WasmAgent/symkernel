@@ -202,7 +202,7 @@ func MetricsHandler(metrics ...*SMTMetrics) http.HandlerFunc {
 			b.WriteString(m.PrometheusText())
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		fmt.Fprint(w, b.String())
+		_, _ = fmt.Fprint(w, b.String())
 	}
 }
 
