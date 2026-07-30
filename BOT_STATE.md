@@ -1,6 +1,6 @@
 # Bot State
 
-_Last updated: 2026-07-30 00:34 UTC by patrol_
+_Last updated: 2026-07-30 00:54 UTC by patrol_
 
 ## Queue
 
@@ -9,17 +9,17 @@ _Last updated: 2026-07-30 00:34 UTC by patrol_
 | Pending | 5 |
 | Active (running/reviewing) | 0 |
 | Blocked | 0 |
-| Completed/Merged (all time) | 168 |
+| Completed/Merged (all time) | 173 |
 
 ## Recent Activity (last 5)
 
 | Issue | Title | Outcome | Date |
 |---|---|---|---|
-| #244 | Bump pinned @wasmagent/protocol version: vendored constra... | completed/retry_split | 2026-07-27 |
-| #240 | Implement internal/verify/symbolic.go symbolic execution ... | merged/auto_closed_resolved | 2026-07-26 |
-| #242 | Scaffold symkerneld HTTP daemon skeleton + internal/verif... | merged/merged | 2026-07-26 |
-| #241 | [milestone Milestone 3 — Core Differentiation] `interna... | merged/auto_closed_resolved | 2026-07-26 |
-| #239 | [milestone Milestone 3] Create basic verify handler infra... | merged/auto_closed_resolved | 2026-07-25 |
+| #256 | [milestone Milestone 12] `internal/z3` — Go-Z3 bindings... | completed/retry_cap_reached | 2026-07-30 |
+| #258 | [milestone Milestone 12] `POST /v1/verify/composed` — C... | completed/retry_cap_reached | 2026-07-30 |
+| #259 | [milestone Milestone 12] `internal/otel` — Extended obs... | completed/retry_cap_reached | 2026-07-30 |
+| #260 | [milestone Milestone 12] `bench/smt-bench.md` — SMT sol... | completed/retry_cap_reached | 2026-07-30 |
+| #257 | [milestone Milestone 12] `POST /v1/verify/smt` — SMT co... | completed/queued | 2026-07-30 |
 
 ---
 _Maintained automatically by claude-bot-go patrol. Do not edit._
