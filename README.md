@@ -38,20 +38,22 @@ wasmagent-js / wasmagent-py / bscode
         │  HTTP  (Criterion/ConstraintIR protocol)
         ▼
   symkerneld (Go HTTP server)
+   ├── GET  /v1/health           — liveness
    ├── POST /v1/verify/cel        — cel-go expression evaluator
    ├── POST /v1/verify/criterion  — wasmagent-js Criterion adapter
-   ├── POST /v1/sandbox/run       — wazero Wasm sandbox
-   ├── POST /v1/verify/z3         — Z3 SMT satisfiability
-   ├── POST /v1/verify/composed   — multi-tier policy composition
-   └── POST /v1/verify/batch      — bulk verification (up to 1000 items)
+   ├── POST /v1/verify/z3         — Z3 SMT satisfiability (SMTLIB2)
+   ├── POST /v1/verify/smt        — SMT solve with variable model
+   ├── POST /v1/verify/symbolic   — symbolic execution (Wasm path exploration)
+   └── POST /v1/verify/composed   — multi-tier policy composition
         │
         ├── internal/cel          — cel-go wrapper, per-request timeout
-        ├── internal/sandbox      — wazero runtime, trap→structured error
-        ├── internal/smt          — go-z3 CGO binding
-        ├── internal/compose      — policy composition (any_pass/all_pass/short_circuit)
-        ├── internal/explain      — verification trace explainer
         ├── internal/policyimport — OPA Rego / AWS Cedar → CEL import (fail-closed)
-        └── internal/batch        — parallel batch execution
+        ├── internal/criterion    — Criterion/ConstraintIR adapter (cel_expr method)
+        ├── internal/sandbox      — wazero runtime, trap→structured error
+        ├── internal/z3           — Z3 via `z3 -in` subprocess (no CGO); backs /v1/verify/z3
+        ├── internal/smt          — SMT solver abstraction over the same `z3` subprocess
+        ├── internal/composed     — policy composition (ordered cel/smt/wasm stages)
+        └── internal/verify       — /v1/verify/z3 + symbolic-execution handlers
 ```
 
 Every response carries a `decision_id` (UUID) and `evalMs` for traceability, following GENAI_SEMCONV field naming to align with `@wasmagent/otel-exporter`.
@@ -143,11 +145,16 @@ Example `ctx.json`:
 { "age": 21, "role": "admin" }
 ```
 
-### Batch verification
+### Batch verification (planned)
 
-The `POST /v1/verify/batch` endpoint accepts up to 1000 verification items in a
-single payload, executing them in parallel with a configurable concurrency limit
-(`SYMKERNEL_BATCH_CONCURRENCY`, default 16).
+> **Planned — not yet implemented.** There is no `/v1/verify/batch` route in
+> `cmd/symkerneld/routes.go` today; the shape below is the intended design.
+> Until it lands, submit items individually to `/v1/verify/cel` or
+> `/v1/verify/criterion`.
+
+The planned `POST /v1/verify/batch` endpoint would accept up to 1000 verification
+items in a single payload, executing them in parallel with a configurable
+concurrency limit (`SYMKERNEL_BATCH_CONCURRENCY`, default 16).
 
 ```bash
 curl -s -X POST http://localhost:8080/v1/verify/batch \
@@ -162,7 +169,7 @@ curl -s -X POST http://localhost:8080/v1/verify/batch \
   }' | jq .
 ```
 
-Response:
+Planned response:
 
 ```json
 {
