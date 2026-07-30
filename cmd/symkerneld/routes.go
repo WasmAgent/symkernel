@@ -6,9 +6,12 @@ import (
 	"github.com/WasmAgent/symkernel/internal/audit"
 	"github.com/WasmAgent/symkernel/internal/cache"
 	cellib "github.com/WasmAgent/symkernel/internal/cel"
+	"github.com/WasmAgent/symkernel/internal/composed"
 	criterion "github.com/WasmAgent/symkernel/internal/criterion"
 	"github.com/WasmAgent/symkernel/internal/diagnostics"
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
+	"github.com/WasmAgent/symkernel/internal/otel"
+	smthttp "github.com/WasmAgent/symkernel/internal/smthttp"
 	"github.com/WasmAgent/symkernel/internal/verify"
 )
 
@@ -22,6 +25,13 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /v1/verify/z3", verify.Handler(&verify.Z3Solver{}))
 	mux.Handle("POST /v1/verify/criterion", criterion.Handler())
 	mux.Handle("POST /v1/verify/symbolic", verify.SymbolicHandler())
+
+	// Milestone 12: Z3 SMT solver integration.
+	mux.Handle("POST /v1/verify/smt", smthttp.Handler())
+	mux.Handle("POST /v1/verify/composed", composed.Handler())
+
+	// Prometheus metrics — exports GlobalSMTMetrics at GET /metrics.
+	otel.RegisterMetricsRoute(mux)
 
 	orchestrator.NewRouter().RegisterRoutes(mux)
 	audit.New().RegisterRoutes(mux)
