@@ -29,6 +29,7 @@ Provides a three-tier reasoning service over HTTP, consumed by wasmagent-js, was
 | M3 — Z3 Formal Verification | planned |
 | M4 — Schema Alignment & Upstream Collaboration | planned |
 | M6 — Policy Composition & Developer Experience | planned |
+| OPA / Cedar compatibility — import Rego/Cedar policies as CEL (`internal/policyimport`) | shipped |
 
 ## Architecture
 
@@ -49,6 +50,7 @@ wasmagent-js / wasmagent-py / bscode
         ├── internal/smt          — go-z3 CGO binding
         ├── internal/compose      — policy composition (any_pass/all_pass/short_circuit)
         ├── internal/explain      — verification trace explainer
+        ├── internal/policyimport — OPA Rego / AWS Cedar → CEL import (fail-closed)
         └── internal/batch        — parallel batch execution
 ```
 
@@ -197,6 +199,7 @@ Production operations documentation for running and maintaining symkerneld.
 | [Circuit Breaker Recovery](docs/circuit-breaker-recovery.md) | Current Z3 timeout behaviour, manual mitigation steps, planned M8 circuit breaker states |
 | [Decision Log Analysis](docs/decision-log-analysis.md) | Audit log schema, export API, `jq` one-liners for pass/fail rates, tier distribution, duplicate detection |
 | [Capacity Planning](docs/capacity-planning.md) | Resource consumption per tier, memory/CPU sizing, vertical vs horizontal scaling, cache tuning, SLO targets |
+| [OPA / Cedar Compatibility](docs/opa-cedar-compat.md) | Import existing OPA Rego / AWS Cedar policies as CEL (fail-closed), supported-subset matrix, and a worked Rego/Cedar → CEL → Z3-verified-invariant example |
 
 ## Multi-Tenancy
 
