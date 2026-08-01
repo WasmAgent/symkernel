@@ -2,6 +2,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -34,6 +35,12 @@ type SymbolicInput struct {
 	Entrypoint      string `json:"entrypoint"`
 	MaxDepth        int    `json:"maxDepth"`
 	PruneInfeasible bool   `json:"pruneInfeasible"`
+
+	// WasmBinary, Entry, and Args are retained for callers of the original
+	// symbolic API. Module and Entrypoint are the endpoint field names.
+	WasmBinary string `json:"wasmBinary,omitempty"`
+	Entry      string `json:"entry,omitempty"`
+	Args       []any  `json:"args,omitempty"`
 }
 
 // SymbolicPath is one terminal path reached by the entrypoint.
@@ -52,20 +59,38 @@ type SymbolicResult struct {
 	DecisionID string         `json:"decision_id"`
 }
 
-// Run symbolically executes the requested Wasm function. Function parameters
-// become arg0, arg1, ... integer symbols. It deliberately supports the core
-// integer/control-flow instruction set used for decisions; unsupported Wasm
-// instructions fail explicitly instead of silently falling back to concrete
-// execution.
+// Run symbolically executes the requested Wasm function. Unbound function
+// parameters become fixed-width arg0, arg1, ... bitvector symbols. It
+// deliberately supports the core integer/control-flow instruction set used
+// for decisions; unsupported Wasm instructions fail explicitly instead of
+// silently falling back to concrete execution.
 func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
-	if strings.TrimSpace(in.Module) == "" {
+	module := strings.TrimSpace(in.Module)
+	if module == "" {
+		module = strings.TrimSpace(in.WasmBinary)
+	} else if legacy := strings.TrimSpace(in.WasmBinary); legacy != "" && legacy != module {
+		return SymbolicResult{}, fmt.Errorf("module and wasmBinary disagree")
+	}
+	if module == "" {
 		return SymbolicResult{}, fmt.Errorf("module is required")
 	}
-	if strings.TrimSpace(in.Entrypoint) == "" {
+	entrypoint := strings.TrimSpace(in.Entrypoint)
+	if entrypoint == "" {
+		entrypoint = strings.TrimSpace(in.Entry)
+	} else if legacy := strings.TrimSpace(in.Entry); legacy != "" && legacy != entrypoint {
+		return SymbolicResult{}, fmt.Errorf("entrypoint and entry disagree")
+	}
+	if entrypoint == "" {
 		return SymbolicResult{}, fmt.Errorf("entrypoint is required")
 	}
-	if len(in.Entrypoint) > maxSymbolicEntrypointLen {
+	if len(entrypoint) > maxSymbolicEntrypointLen {
 		return SymbolicResult{}, fmt.Errorf("entrypoint exceeds %d bytes", maxSymbolicEntrypointLen)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return SymbolicResult{}, err
 	}
 	if in.MaxDepth < 0 {
 		return SymbolicResult{}, fmt.Errorf("maxDepth must not be negative")
@@ -77,17 +102,17 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 		return SymbolicResult{}, fmt.Errorf("maxDepth must not exceed %d", maxSymbolicMaxDepth)
 	}
 	maxEncodedModule := 4 * ((maxSymbolicModuleBytes + 2) / 3)
-	if len(in.Module) > maxEncodedModule {
+	if len(module) > maxEncodedModule {
 		return SymbolicResult{}, fmt.Errorf("module exceeds %d decoded bytes", maxSymbolicModuleBytes)
 	}
-	wasm, err := base64.StdEncoding.DecodeString(in.Module)
+	wasm, err := base64.StdEncoding.DecodeString(module)
 	if err != nil {
 		return SymbolicResult{}, fmt.Errorf("decode module: %w", err)
 	}
 	if len(wasm) > maxSymbolicModuleBytes {
 		return SymbolicResult{}, fmt.Errorf("module exceeds %d bytes", maxSymbolicModuleBytes)
 	}
-	fn, err := parseExportedFunction(wasm, in.Entrypoint)
+	fn, err := parseExportedFunction(wasm, entrypoint)
 	if err != nil {
 		return SymbolicResult{}, err
 	}
@@ -95,12 +120,28 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 	initial := symbolicState{locals: make([]symbolicValue, len(fn.params)+len(fn.locals))}
 	model := make(map[string]any, len(fn.params))
 	for i, typ := range fn.params {
-		if typ != valueI32 && typ != valueI64 {
+		bits, ok := wasmIntegerWidth(typ)
+		if !ok {
 			return SymbolicResult{}, fmt.Errorf("entrypoint parameter %d has unsupported type 0x%x", i, typ)
 		}
+		if i < len(in.Args) && in.Args[i] != nil {
+			value, err := concreteArgument(in.Args[i], bits)
+			if err != nil {
+				return SymbolicResult{}, fmt.Errorf("argument %d: %w", i, err)
+			}
+			initial.locals[i] = value
+			continue
+		}
 		name := fmt.Sprintf("arg%d", i)
-		initial.locals[i] = symbolicValue{expr: name}
-		model[name] = "Int"
+		initial.locals[i] = symbolicValue{expr: name, bits: bits}
+		model[name] = fmt.Sprintf("BitVec_%d", bits)
+	}
+	for i, typ := range fn.locals {
+		bits, ok := wasmIntegerWidth(typ)
+		if !ok {
+			return SymbolicResult{}, fmt.Errorf("entrypoint local %d has unsupported type 0x%x", i, typ)
+		}
+		initial.locals[len(fn.params)+i] = typedConstant(0, bits)
 	}
 
 	exec := executor{ctx: ctx, maxDepth: in.MaxDepth, prune: in.PruneInfeasible, model: model, explored: 1}
@@ -119,7 +160,7 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 			continue
 		}
 		if len(state.stack) < len(fn.results) {
-			return SymbolicResult{}, fmt.Errorf("entrypoint %q did not produce its declared results", in.Entrypoint)
+			return SymbolicResult{}, fmt.Errorf("entrypoint %q did not produce its declared results", entrypoint)
 		}
 		paths = append(paths, SymbolicPath{
 			ID: uuid.NewString(), Feasible: feasible, Constraints: state.constraints,
@@ -133,9 +174,74 @@ type symbolicValue struct {
 	expr    string
 	known   *int64
 	boolean bool
+	bits    byte
 }
 
-func constant(v int64) symbolicValue { return symbolicValue{expr: fmt.Sprintf("%d", v), known: &v} }
+func typedConstant(v int64, bits byte) symbolicValue {
+	v = wrapSigned(v, bits)
+	unsigned := uint64(v)
+	if bits < 64 {
+		unsigned &= (uint64(1) << bits) - 1
+	}
+	return symbolicValue{expr: fmt.Sprintf("(_ bv%d %d)", unsigned, bits), known: &v, bits: bits}
+}
+
+func wrapSigned(v int64, bits byte) int64 {
+	if bits == 32 {
+		return int64(int32(v))
+	}
+	return v
+}
+
+func (v symbolicValue) zeroExpr() string {
+	return fmt.Sprintf("(_ bv0 %d)", v.bits)
+}
+
+func concreteArgument(value any, bits byte) (symbolicValue, error) {
+	var number int64
+	switch v := value.(type) {
+	case int:
+		number = int64(v)
+	case int8:
+		number = int64(v)
+	case int16:
+		number = int64(v)
+	case int32:
+		number = int64(v)
+	case int64:
+		number = v
+	case uint:
+		if uint64(v) > uint64(^uint64(0)>>1) {
+			return symbolicValue{}, fmt.Errorf("value %d is outside the signed i64 range", v)
+		}
+		number = int64(v)
+	case uint8:
+		number = int64(v)
+	case uint16:
+		number = int64(v)
+	case uint32:
+		number = int64(v)
+	case uint64:
+		if v > uint64(^uint64(0)>>1) {
+			return symbolicValue{}, fmt.Errorf("value %d is outside the signed i64 range", v)
+		}
+		number = int64(v)
+	case float64:
+		if v != float64(int64(v)) {
+			return symbolicValue{}, fmt.Errorf("value %v is not an integer", v)
+		}
+		number = int64(v)
+	case json.Number:
+		parsed, err := v.Int64()
+		if err != nil {
+			return symbolicValue{}, fmt.Errorf("value %q is not an integer", v)
+		}
+		number = parsed
+	default:
+		return symbolicValue{}, fmt.Errorf("unsupported concrete value %T", value)
+	}
+	return typedConstant(number, bits), nil
+}
 
 func (v symbolicValue) condition() string {
 	if v.boolean {
@@ -153,7 +259,7 @@ func (v symbolicValue) condition() string {
 		}
 		return "true"
 	}
-	return "(not (= " + v.expr + " 0))"
+	return "(not (= " + v.expr + " " + v.zeroExpr() + "))"
 }
 
 type symbolicState struct {
@@ -319,20 +425,26 @@ func executeInstruction(s *symbolicState, in instruction) error {
 		if in.opcode == 0x22 {
 			s.stack = append(s.stack, v)
 		}
-	case 0x41, 0x42:
-		s.stack = append(s.stack, constant(in.value)) // i32/i64.const
-	case 0x45: // i32.eqz
+	case 0x41:
+		s.stack = append(s.stack, typedConstant(in.value, 32))
+	case 0x42:
+		s.stack = append(s.stack, typedConstant(in.value, 64))
+	case 0x45, 0x50: // i32.eqz / i64.eqz
 		v, err := s.pop()
 		if err != nil {
 			return err
+		}
+		if (in.opcode == 0x45 && v.bits != 32) || (in.opcode == 0x50 && v.bits != 64) {
+			return fmt.Errorf("eqz operand has width %d", v.bits)
 		}
 		var known *bool
 		if v.known != nil {
 			value := *v.known == 0
 			known = &value
 		}
-		s.stack = append(s.stack, boolValue("(= "+v.expr+" 0)", known))
-	case 0x46, 0x47, 0x48, 0x4a, 0x4c, 0x4e: // eq, ne, lt_s, gt_s, le_s, ge_s
+		s.stack = append(s.stack, boolValue("(= "+v.expr+" "+v.zeroExpr()+")", known))
+	case 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+		0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a:
 		b, err := s.pop()
 		if err != nil {
 			return err
@@ -341,14 +453,20 @@ func executeInstruction(s *symbolicState, in instruction) error {
 		if err != nil {
 			return err
 		}
-		op := map[byte]string{0x46: "=", 0x47: "distinct", 0x48: "<", 0x4a: ">", 0x4c: "<=", 0x4e: ">="}[in.opcode]
+		if a.bits == 0 || a.bits != b.bits {
+			return fmt.Errorf("comparison operands have incompatible widths %d and %d", a.bits, b.bits)
+		}
+		op, ok := comparisonOperator(in.opcode)
+		if !ok {
+			return fmt.Errorf("unsupported comparison opcode 0x%x", in.opcode)
+		}
 		var known *bool
 		if a.known != nil && b.known != nil {
-			value := compare(in.opcode, *a.known, *b.known)
+			value := compare(in.opcode, *a.known, *b.known, a.bits)
 			known = &value
 		}
 		s.stack = append(s.stack, boolValue("("+op+" "+a.expr+" "+b.expr+")", known))
-	case 0x6a, 0x6b, 0x6c: // i32.add/sub/mul
+	case 0x6a, 0x6b, 0x6c, 0x7c, 0x7d, 0x7e: // i32/i64 add/sub/mul
 		b, err := s.pop()
 		if err != nil {
 			return err
@@ -357,19 +475,25 @@ func executeInstruction(s *symbolicState, in instruction) error {
 		if err != nil {
 			return err
 		}
-		op := map[byte]string{0x6a: "+", 0x6b: "-", 0x6c: "*"}[in.opcode]
-		if a.known != nil && b.known != nil {
-			switch in.opcode {
-			case 0x6a:
-				s.stack = append(s.stack, constant(*a.known+*b.known))
-			case 0x6b:
-				s.stack = append(s.stack, constant(*a.known-*b.known))
-			default:
-				s.stack = append(s.stack, constant(*a.known**b.known))
-			}
-			return nil
+		bits, ok := arithmeticWidth(in.opcode)
+		if !ok || a.bits != bits || b.bits != bits {
+			return fmt.Errorf("arithmetic operands have invalid widths %d and %d", a.bits, b.bits)
 		}
-		s.stack = append(s.stack, symbolicValue{expr: "(" + op + " " + a.expr + " " + b.expr + ")"})
+		op := map[byte]string{0x6a: "bvadd", 0x6b: "bvsub", 0x6c: "bvmul", 0x7c: "bvadd", 0x7d: "bvsub", 0x7e: "bvmul"}[in.opcode]
+		if a.known != nil && b.known != nil {
+			var value int64
+			switch in.opcode {
+			case 0x6a, 0x7c:
+				value = *a.known + *b.known
+			case 0x6b, 0x7d:
+				value = *a.known - *b.known
+			default:
+				value = *a.known * *b.known
+			}
+			s.stack = append(s.stack, typedConstant(value, bits))
+		} else {
+			s.stack = append(s.stack, symbolicValue{expr: "(" + op + " " + a.expr + " " + b.expr + ")", bits: bits})
+		}
 	case 0x1a:
 		_, err := s.pop()
 		return err // drop
@@ -389,20 +513,68 @@ func boolValue(expr string, value *bool) symbolicValue {
 	}
 	return symbolicValue{expr: expr, boolean: true}
 }
-func compare(op byte, a, b int64) bool {
+func comparisonOperator(op byte) (string, bool) {
+	operators := map[byte]string{
+		0x46: "=", 0x47: "distinct", 0x48: "bvslt", 0x49: "bvult",
+		0x4a: "bvsgt", 0x4b: "bvugt", 0x4c: "bvsle", 0x4d: "bvule",
+		0x4e: "bvsge", 0x4f: "bvuge", 0x51: "=", 0x52: "distinct",
+		0x53: "bvslt", 0x54: "bvult", 0x55: "bvsgt", 0x56: "bvugt",
+		0x57: "bvsle", 0x58: "bvule", 0x59: "bvsge", 0x5a: "bvuge",
+	}
+	operator, ok := operators[op]
+	return operator, ok
+}
+
+func arithmeticWidth(op byte) (byte, bool) {
 	switch op {
-	case 0x46:
-		return a == b
-	case 0x47:
-		return a != b
-	case 0x48:
-		return a < b
-	case 0x4a:
-		return a > b
-	case 0x4c:
-		return a <= b
+	case 0x6a, 0x6b, 0x6c:
+		return 32, true
+	case 0x7c, 0x7d, 0x7e:
+		return 64, true
 	default:
+		return 0, false
+	}
+}
+
+func compare(op byte, a, b int64, bits byte) bool {
+	unsignedA, unsignedB := uint64(a), uint64(b)
+	if bits < 64 {
+		mask := (uint64(1) << bits) - 1
+		unsignedA &= mask
+		unsignedB &= mask
+	}
+	switch op {
+	case 0x46, 0x51:
+		return a == b
+	case 0x47, 0x52:
+		return a != b
+	case 0x48, 0x53:
+		return a < b
+	case 0x49, 0x54:
+		return unsignedA < unsignedB
+	case 0x4a, 0x55:
+		return a > b
+	case 0x4b, 0x56:
+		return unsignedA > unsignedB
+	case 0x4c, 0x57:
+		return a <= b
+	case 0x4d, 0x58:
+		return unsignedA <= unsignedB
+	case 0x4e, 0x59:
 		return a >= b
+	default:
+		return unsignedA >= unsignedB
+	}
+}
+
+func wasmIntegerWidth(typ byte) (byte, bool) {
+	switch typ {
+	case valueI32:
+		return 32, true
+	case valueI64:
+		return 64, true
+	default:
+		return 0, false
 	}
 }
 
@@ -620,7 +792,7 @@ func parseCode(b []byte) ([]byte, []instruction, error) {
 			return nil, nil, fmt.Errorf("invalid wasm locals")
 		}
 		p = q
-		locals = append(locals, bytesRepeat(b[p], int(n))...)
+		locals = append(locals, bytes.Repeat([]byte{b[p]}, int(n))...)
 		p++
 	}
 	body, p, stop, err := parseInstructions(b, p)
@@ -631,13 +803,6 @@ func parseCode(b []byte) ([]byte, []instruction, error) {
 		return nil, nil, fmt.Errorf("invalid wasm function body")
 	}
 	return locals, body, nil
-}
-func bytesRepeat(v byte, n int) []byte {
-	r := make([]byte, n)
-	for i := range r {
-		r[i] = v
-	}
-	return r
 }
 func parseInstructions(b []byte, p int) ([]instruction, int, byte, error) {
 	return parseInstructionsWithBudget(b, p, new(int), 0)
@@ -730,6 +895,7 @@ func SymbolicHandler() http.HandlerFunc {
 		r.Body = http.MaxBytesReader(w, r.Body, maxSymbolicRequestBytes)
 		var input SymbolicInput
 		decoder := json.NewDecoder(r.Body)
+		decoder.UseNumber()
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&input); err != nil {
 			http.Error(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)

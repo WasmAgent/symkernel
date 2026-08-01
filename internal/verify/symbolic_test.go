@@ -60,7 +60,7 @@ func TestRun_RejectsInvalidInput(t *testing.T) {
 func TestSymbolicComparisonConditionPreservesBoolExpression(t *testing.T) {
 	t.Parallel()
 
-	state := symbolicState{locals: []symbolicValue{{expr: "arg0"}}}
+	state := symbolicState{locals: []symbolicValue{{expr: "arg0", bits: 32}}}
 	for _, instruction := range []instruction{
 		{opcode: 0x20, index: 0},
 		{opcode: 0x41, value: 0},
@@ -74,8 +74,69 @@ func TestSymbolicComparisonConditionPreservesBoolExpression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pop() error = %v", err)
 	}
-	if got, want := condition.condition(), "(= arg0 0)"; got != want {
+	if got, want := condition.condition(), "(= arg0 (_ bv0 32))"; got != want {
 		t.Errorf("condition() = %q, want %q", got, want)
+	}
+}
+
+func TestI32ArithmeticWraps(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		opcode byte
+		a, b   int64
+		want   int64
+	}{
+		{name: "add", opcode: 0x6a, a: 2147483647, b: 1, want: -2147483648},
+		{name: "sub", opcode: 0x6b, a: -2147483648, b: 1, want: 2147483647},
+		{name: "mul", opcode: 0x6c, a: 65536, b: 65536, want: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := symbolicState{stack: []symbolicValue{typedConstant(test.a, 32), typedConstant(test.b, 32)}}
+			if err := executeInstruction(&state, instruction{opcode: test.opcode}); err != nil {
+				t.Fatalf("executeInstruction(%#x) error = %v", test.opcode, err)
+			}
+			got, err := state.pop()
+			if err != nil {
+				t.Fatalf("pop() error = %v", err)
+			}
+			if got.known == nil || *got.known != test.want {
+				t.Errorf("result = %+v, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestI32ArithmeticSymbolicallyWraps(t *testing.T) {
+	t.Parallel()
+
+	state := symbolicState{stack: []symbolicValue{{expr: "arg0", bits: 32}, typedConstant(1, 32)}}
+	if err := executeInstruction(&state, instruction{opcode: 0x6a}); err != nil {
+		t.Fatalf("executeInstruction(i32.add) error = %v", err)
+	}
+	got, err := state.pop()
+	if err != nil {
+		t.Fatalf("pop() error = %v", err)
+	}
+	if want := "(bvadd arg0 (_ bv1 32))"; got.expr != want {
+		t.Errorf("symbolic result = %q, want %q", got.expr, want)
+	}
+}
+
+func TestRun_AcceptsLegacySymbolicInput(t *testing.T) {
+	t.Parallel()
+
+	result, err := Run(context.Background(), SymbolicInput{
+		WasmBinary: wasmReturningI32(42),
+		Entry:      "main",
+		Args:       []any{int32(1)},
+	})
+	if err != nil {
+		t.Fatalf("Run() with legacy input error = %v", err)
+	}
+	if len(result.Paths) != 1 || result.Paths[0].Output != int32(42) {
+		t.Errorf("legacy result = %+v, want one path with output 42", result)
 	}
 }
 
