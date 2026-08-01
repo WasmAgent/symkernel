@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/WasmAgent/symkernel/internal/z3"
@@ -30,17 +32,26 @@ const (
 )
 
 // SymbolicInput is the request payload for POST /v1/verify/symbolic.
+// Module, Entrypoint, MaxDepth, and PruneInfeasible are the v12 endpoint
+// fields. The legacy fields below remain supported so existing Go callers can
+// migrate without changing their request construction in one step. When both
+// names are supplied, Run requires the module and entrypoint values to agree.
 type SymbolicInput struct {
 	Module          string `json:"module"`
 	Entrypoint      string `json:"entrypoint"`
 	MaxDepth        int    `json:"maxDepth"`
 	PruneInfeasible bool   `json:"pruneInfeasible"`
 
-	// WasmBinary, Entry, and Args are retained for callers of the original
-	// symbolic API. Module and Entrypoint are the endpoint field names.
+	// WasmBinary is the legacy base64-encoded module field.
+	// Deprecated: use Module.
 	WasmBinary string `json:"wasmBinary,omitempty"`
-	Entry      string `json:"entry,omitempty"`
-	Args       []any  `json:"args,omitempty"`
+	// Entry is the legacy exported function field.
+	// Deprecated: use Entrypoint.
+	Entry string `json:"entry,omitempty"`
+	// Args are concrete legacy function arguments. They are still applied to
+	// matching parameters when supplied.
+	// Deprecated: prefer symbolic parameters through the v12 endpoint fields.
+	Args []any `json:"args,omitempty"`
 }
 
 // SymbolicPath is one terminal path reached by the entrypoint.
@@ -211,9 +222,6 @@ func concreteArgument(value any, bits byte) (symbolicValue, error) {
 	case int64:
 		number = v
 	case uint:
-		if uint64(v) > uint64(^uint64(0)>>1) {
-			return symbolicValue{}, fmt.Errorf("value %d is outside the signed i64 range", v)
-		}
 		number = int64(v)
 	case uint8:
 		number = int64(v)
@@ -222,21 +230,25 @@ func concreteArgument(value any, bits byte) (symbolicValue, error) {
 	case uint32:
 		number = int64(v)
 	case uint64:
-		if v > uint64(^uint64(0)>>1) {
-			return symbolicValue{}, fmt.Errorf("value %d is outside the signed i64 range", v)
-		}
 		number = int64(v)
 	case float64:
-		if v != float64(int64(v)) {
+		const minInt64 = -1 << 63
+		if math.IsNaN(v) || math.IsInf(v, 0) || math.Trunc(v) != v ||
+			v < float64(minInt64) || v >= -float64(minInt64) {
 			return symbolicValue{}, fmt.Errorf("value %v is not an integer", v)
 		}
 		number = int64(v)
 	case json.Number:
 		parsed, err := v.Int64()
-		if err != nil {
+		if err == nil {
+			number = parsed
+			break
+		}
+		unsigned, unsignedErr := strconv.ParseUint(string(v), 10, 64)
+		if unsignedErr != nil {
 			return symbolicValue{}, fmt.Errorf("value %q is not an integer", v)
 		}
-		number = parsed
+		number = int64(unsigned)
 	default:
 		return symbolicValue{}, fmt.Errorf("unsupported concrete value %T", value)
 	}
@@ -481,16 +493,7 @@ func executeInstruction(s *symbolicState, in instruction) error {
 		}
 		op := map[byte]string{0x6a: "bvadd", 0x6b: "bvsub", 0x6c: "bvmul", 0x7c: "bvadd", 0x7d: "bvsub", 0x7e: "bvmul"}[in.opcode]
 		if a.known != nil && b.known != nil {
-			var value int64
-			switch in.opcode {
-			case 0x6a, 0x7c:
-				value = *a.known + *b.known
-			case 0x6b, 0x7d:
-				value = *a.known - *b.known
-			default:
-				value = *a.known * *b.known
-			}
-			s.stack = append(s.stack, typedConstant(value, bits))
+			s.stack = append(s.stack, typedConstant(wrappedArithmetic(*a.known, *b.known, in.opcode, bits), bits))
 		} else {
 			s.stack = append(s.stack, symbolicValue{expr: "(" + op + " " + a.expr + " " + b.expr + ")", bits: bits})
 		}
@@ -501,6 +504,22 @@ func executeInstruction(s *symbolicState, in instruction) error {
 		return fmt.Errorf("unsupported symbolic wasm opcode 0x%x", in.opcode)
 	}
 	return nil
+}
+
+func wrappedArithmetic(a, b int64, opcode, bits byte) int64 {
+	var value uint64
+	switch opcode {
+	case 0x6a, 0x7c:
+		value = uint64(a) + uint64(b)
+	case 0x6b, 0x7d:
+		value = uint64(a) - uint64(b)
+	default:
+		value = uint64(a) * uint64(b)
+	}
+	if bits == 32 {
+		return int64(int32(uint32(value)))
+	}
+	return int64(value)
 }
 
 func boolValue(expr string, value *bool) symbolicValue {

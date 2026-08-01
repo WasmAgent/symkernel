@@ -124,6 +124,25 @@ func TestI32ArithmeticSymbolicallyWraps(t *testing.T) {
 	}
 }
 
+func TestI64ArithmeticWraps(t *testing.T) {
+	t.Parallel()
+
+	state := symbolicState{stack: []symbolicValue{
+		typedConstant(9223372036854775807, 64),
+		typedConstant(1, 64),
+	}}
+	if err := executeInstruction(&state, instruction{opcode: 0x7c}); err != nil {
+		t.Fatalf("executeInstruction(i64.add) error = %v", err)
+	}
+	got, err := state.pop()
+	if err != nil {
+		t.Fatalf("pop() error = %v", err)
+	}
+	if got.known == nil || *got.known != -9223372036854775808 {
+		t.Errorf("result = %+v, want i64 minimum", got)
+	}
+}
+
 func TestRun_AcceptsLegacySymbolicInput(t *testing.T) {
 	t.Parallel()
 
@@ -137,6 +156,31 @@ func TestRun_AcceptsLegacySymbolicInput(t *testing.T) {
 	}
 	if len(result.Paths) != 1 || result.Paths[0].Output != int32(42) {
 		t.Errorf("legacy result = %+v, want one path with output 42", result)
+	}
+}
+
+func TestConcreteArgumentWrapsToWasmWidth(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name  string
+		value any
+		bits  byte
+		want  int64
+	}{
+		{name: "i32 uint overflow", value: uint64(0xffffffff), bits: 32, want: -1},
+		{name: "i64 uint overflow", value: ^uint64(0), bits: 64, want: -1},
+		{name: "json uint overflow", value: json.Number("18446744073709551615"), bits: 64, want: -1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := concreteArgument(test.value, test.bits)
+			if err != nil {
+				t.Fatalf("concreteArgument() error = %v", err)
+			}
+			if got.known == nil || *got.known != test.want {
+				t.Fatalf("known value = %v, want %d", got.known, test.want)
+			}
+		})
 	}
 }
 
