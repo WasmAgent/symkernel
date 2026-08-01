@@ -9,8 +9,11 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/WasmAgent/symkernel/internal/symbolic/cache"
 )
 
 // Solution is the outcome of SolveConstraints.
@@ -26,6 +29,8 @@ type Solution struct {
 	// milliseconds.
 	SolverMs int64 `json:"solver_ms"`
 }
+
+var decisionCache = cache.NewFromEnv()
 
 // SolveConstraints submits an SMTLIB2 constraint string to Z3 and returns the
 // result. model is an optional map of variable name → sort hint (or concrete
@@ -50,6 +55,12 @@ func SolveConstraints(constraints string, model map[string]any) (Solution, error
 // SolveConstraintsCtx is like SolveConstraints but honours the caller's ctx.
 func SolveConstraintsCtx(ctx context.Context, constraints string, model map[string]any) (Solution, error) {
 	smt2 := buildSMT2(constraints, model)
+	if err := ctx.Err(); err != nil {
+		return Solution{Sat: "unknown"}, nil
+	}
+	if decision, ok := decisionCache.Get(smt2); ok {
+		return solutionFromDecision(decision), nil
+	}
 
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "z3", "-in")
@@ -75,6 +86,9 @@ func SolveConstraintsCtx(ctx context.Context, constraints string, model map[stri
 			sol, parseErr := parseOutput(stdout.String())
 			if parseErr == nil {
 				sol.SolverMs = solverMs
+				if sol.Sat != "unknown" {
+					decisionCache.Set(smt2, decisionFromSolution(sol))
+				}
 				return sol, nil
 			}
 		}
@@ -86,7 +100,26 @@ func SolveConstraintsCtx(ctx context.Context, constraints string, model map[stri
 		return Solution{}, parseErr
 	}
 	sol.SolverMs = solverMs
+	if sol.Sat != "unknown" {
+		decisionCache.Set(smt2, decisionFromSolution(sol))
+	}
 	return sol, nil
+}
+
+func decisionFromSolution(solution Solution) cache.Decision {
+	return cache.Decision{
+		Sat:       solution.Sat,
+		Model:     solution.Model,
+		UnsatCore: solution.UnsatCore,
+	}
+}
+
+func solutionFromDecision(decision cache.Decision) Solution {
+	return Solution{
+		Sat:       decision.Sat,
+		Model:     decision.Model,
+		UnsatCore: decision.UnsatCore,
+	}
 }
 
 // hasNamedAssertions reports whether the constraints string uses SMTLIB2
@@ -111,7 +144,13 @@ func buildSMT2(constraints string, model map[string]any) string {
 		b.WriteString("(set-option :produce-unsat-cores true)\n")
 	}
 
-	for name, val := range model {
+	names := make([]string, 0, len(model))
+	for name := range model {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		val := model[name]
 		sort := inferSort(val)
 		fmt.Fprintf(&b, "(declare-const %s %s)\n", name, sort)
 	}
