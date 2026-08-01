@@ -30,8 +30,11 @@ func TestRun_ExecutesEntrypoint(t *testing.T) {
 		t.Fatalf("paths = %d, want 1", len(result.Paths))
 	}
 	path := result.Paths[0]
-	if !path.Feasible || len(path.Constraints) != 0 || path.Output != int32(42) {
+	if !path.Feasible || path.Constraints != "" || path.Output != int32(42) {
 		t.Errorf("path = %+v, want feasible empty-constraint path with output 42", path)
+	}
+	if path.Model != nil {
+		t.Errorf("path.Model = %v, want nil for a function with no symbolic parameters", path.Model)
 	}
 	if _, err := uuid.Parse(path.ID); err != nil {
 		t.Errorf("path ID = %q is not a UUID: %v", path.ID, err)
@@ -278,11 +281,16 @@ func TestSymbolicHandler(t *testing.T) {
 	if contentType := rec.Header().Get("Content-Type"); contentType != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", contentType)
 	}
-	var result SymbolicResult
+	var result struct {
+		Paths []struct {
+			Constraints []string `json:"constraints"`
+			Output      any      `json:"output"`
+		} `json:"paths"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(result.Paths) != 1 || result.Paths[0].Output != float64(7) {
+	if len(result.Paths) != 1 || len(result.Paths[0].Constraints) != 0 || result.Paths[0].Output != float64(7) {
 		t.Errorf("response = %+v, want one path with output 7", result)
 	}
 }

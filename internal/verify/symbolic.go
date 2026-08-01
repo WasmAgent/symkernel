@@ -62,10 +62,18 @@ type SymbolicInput struct {
 
 // SymbolicPath is one terminal path reached by the entrypoint.
 type SymbolicPath struct {
-	ID          string   `json:"id"`
-	Feasible    bool     `json:"feasible"`
-	Constraints []string `json:"constraints"`
-	Output      any      `json:"output"`
+	// Constraints is the SMT-LIB assertions guarding this path. It remains a
+	// string for compatibility with callers that pass it to SolveConstraintsCtx.
+	Constraints string `json:"constraints"`
+	// Model is a satisfying assignment for Constraints keyed by symbol. It is
+	// retained for compatibility with the original symbolic API.
+	Model map[string]any `json:"model"`
+
+	ID       string `json:"id"`
+	Feasible bool   `json:"feasible"`
+	Output   any    `json:"output"`
+
+	constraints []string
 }
 
 // SymbolicResult is the response payload for symbolic verification.
@@ -168,7 +176,7 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 	}
 	paths := make([]SymbolicPath, 0, len(states))
 	for _, state := range states {
-		feasible, err := exec.feasible(state.constraints)
+		feasible, pathModel, err := exec.feasibility(state.constraints)
 		if err != nil {
 			return SymbolicResult{}, err
 		}
@@ -180,11 +188,23 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 			return SymbolicResult{}, fmt.Errorf("entrypoint %q did not produce its declared results", entrypoint)
 		}
 		paths = append(paths, SymbolicPath{
-			ID: uuid.NewString(), Feasible: feasible, Constraints: state.constraints,
-			Output: state.output(fn.results),
+			ID:          uuid.NewString(),
+			Feasible:    feasible,
+			Constraints: smt2Assertions(state.constraints),
+			Model:       pathModel,
+			Output:      state.output(fn.results),
+			constraints: append([]string(nil), state.constraints...),
 		})
 	}
 	return SymbolicResult{Paths: paths, Explored: exec.explored, Pruned: exec.pruned, DecisionID: uuid.NewString()}, nil
+}
+
+func smt2Assertions(constraints []string) string {
+	var b strings.Builder
+	for _, constraint := range constraints {
+		fmt.Fprintf(&b, "(assert %s)\n", constraint)
+	}
+	return b.String()
 }
 
 type symbolicValue struct {
@@ -403,8 +423,13 @@ func (e *executor) run(program []instruction, states []symbolicState) ([]symboli
 }
 
 func (e *executor) feasible(constraints []string) (bool, error) {
+	feasible, _, err := e.feasibility(constraints)
+	return feasible, err
+}
+
+func (e *executor) feasibility(constraints []string) (bool, map[string]any, error) {
 	if len(constraints) == 0 {
-		return true, nil
+		return true, nil, nil
 	}
 	var b strings.Builder
 	for _, c := range constraints {
@@ -412,15 +437,15 @@ func (e *executor) feasible(constraints []string) (bool, error) {
 	}
 	solution, err := z3.SolveConstraintsCtx(e.ctx, b.String(), e.model)
 	if err != nil {
-		return false, fmt.Errorf("check path feasibility: %w", err)
+		return false, nil, fmt.Errorf("check path feasibility: %w", err)
 	}
 	switch solution.Sat {
 	case "sat":
-		return true, nil
+		return true, solution.Model, nil
 	case "unsat":
-		return false, nil
+		return false, nil, nil
 	default:
-		return false, fmt.Errorf("check path feasibility: z3 returned %q", solution.Sat)
+		return false, nil, fmt.Errorf("check path feasibility: z3 returned %q", solution.Sat)
 	}
 }
 
@@ -1005,6 +1030,42 @@ func SymbolicHandler() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(result)
+		_ = json.NewEncoder(w).Encode(symbolicHTTPResponse(result))
+	}
+}
+
+// symbolicHTTPResponse keeps the v12 HTTP contract independent of the
+// long-standing Go SymbolicPath API. In particular, the endpoint returns one
+// expression per constraints array element while Go callers retain the single
+// SMT-LIB constraint string required by existing solver integrations.
+type symbolicHTTPPath struct {
+	ID          string   `json:"id"`
+	Feasible    bool     `json:"feasible"`
+	Constraints []string `json:"constraints"`
+	Output      any      `json:"output"`
+}
+
+type symbolicHTTPResult struct {
+	Paths      []symbolicHTTPPath `json:"paths"`
+	Explored   int                `json:"explored"`
+	Pruned     int                `json:"pruned"`
+	DecisionID string             `json:"decision_id"`
+}
+
+func symbolicHTTPResponse(result SymbolicResult) symbolicHTTPResult {
+	paths := make([]symbolicHTTPPath, len(result.Paths))
+	for i, path := range result.Paths {
+		paths[i] = symbolicHTTPPath{
+			ID:          path.ID,
+			Feasible:    path.Feasible,
+			Constraints: append([]string(nil), path.constraints...),
+			Output:      path.Output,
+		}
+	}
+	return symbolicHTTPResult{
+		Paths:      paths,
+		Explored:   result.Explored,
+		Pruned:     result.Pruned,
+		DecisionID: result.DecisionID,
 	}
 }
