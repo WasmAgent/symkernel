@@ -14,7 +14,19 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultSymbolicMaxDepth = 100
+const (
+	defaultSymbolicMaxDepth  = 100
+	maxSymbolicMaxDepth      = 256
+	maxSymbolicExplored      = 4096
+	maxSymbolicRequestBytes  = 2 << 20
+	maxSymbolicModuleBytes   = 1 << 20
+	maxSymbolicEntrypointLen = 256
+	maxWasmVectorItems       = 4096
+	maxWasmParams            = 64
+	maxWasmLocals            = 4096
+	maxWasmInstructions      = 16384
+	maxWasmControlDepth      = 256
+)
 
 // SymbolicInput is the request payload for POST /v1/verify/symbolic.
 type SymbolicInput struct {
@@ -52,15 +64,28 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 	if strings.TrimSpace(in.Entrypoint) == "" {
 		return SymbolicResult{}, fmt.Errorf("entrypoint is required")
 	}
+	if len(in.Entrypoint) > maxSymbolicEntrypointLen {
+		return SymbolicResult{}, fmt.Errorf("entrypoint exceeds %d bytes", maxSymbolicEntrypointLen)
+	}
 	if in.MaxDepth < 0 {
 		return SymbolicResult{}, fmt.Errorf("maxDepth must not be negative")
 	}
 	if in.MaxDepth == 0 {
 		in.MaxDepth = defaultSymbolicMaxDepth
 	}
+	if in.MaxDepth > maxSymbolicMaxDepth {
+		return SymbolicResult{}, fmt.Errorf("maxDepth must not exceed %d", maxSymbolicMaxDepth)
+	}
+	maxEncodedModule := 4 * ((maxSymbolicModuleBytes + 2) / 3)
+	if len(in.Module) > maxEncodedModule {
+		return SymbolicResult{}, fmt.Errorf("module exceeds %d decoded bytes", maxSymbolicModuleBytes)
+	}
 	wasm, err := base64.StdEncoding.DecodeString(in.Module)
 	if err != nil {
 		return SymbolicResult{}, fmt.Errorf("decode module: %w", err)
+	}
+	if len(wasm) > maxSymbolicModuleBytes {
+		return SymbolicResult{}, fmt.Errorf("module exceeds %d bytes", maxSymbolicModuleBytes)
 	}
 	fn, err := parseExportedFunction(wasm, in.Entrypoint)
 	if err != nil {
@@ -105,13 +130,23 @@ func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
 }
 
 type symbolicValue struct {
-	expr  string
-	known *int64
+	expr    string
+	known   *int64
+	boolean bool
 }
 
 func constant(v int64) symbolicValue { return symbolicValue{expr: fmt.Sprintf("%d", v), known: &v} }
 
 func (v symbolicValue) condition() string {
+	if v.boolean {
+		if v.known != nil {
+			if *v.known == 0 {
+				return "false"
+			}
+			return "true"
+		}
+		return v.expr
+	}
 	if v.known != nil {
 		if *v.known == 0 {
 			return "false"
@@ -211,6 +246,9 @@ func (e *executor) run(program []instruction, states []symbolicState) ([]symboli
 						constraint = "(not " + constraint + ")"
 					}
 					candidate.constraints = append(candidate.constraints, constraint)
+					if e.explored >= maxSymbolicExplored {
+						return nil, fmt.Errorf("symbolic execution exceeded the %d path limit", maxSymbolicExplored)
+					}
 					e.explored++
 					if e.prune {
 						ok, err := e.feasible(candidate.constraints)
@@ -252,7 +290,14 @@ func (e *executor) feasible(constraints []string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("check path feasibility: %w", err)
 	}
-	return solution.Sat != "unsat", nil
+	switch solution.Sat {
+	case "sat":
+		return true, nil
+	case "unsat":
+		return false, nil
+	default:
+		return false, fmt.Errorf("check path feasibility: z3 returned %q", solution.Sat)
+	}
 }
 
 func executeInstruction(s *symbolicState, in instruction) error {
@@ -336,12 +381,13 @@ func executeInstruction(s *symbolicState, in instruction) error {
 
 func boolValue(expr string, value *bool) symbolicValue {
 	if value != nil {
+		known := int64(0)
 		if *value {
-			return constant(1)
+			known = 1
 		}
-		return constant(0)
+		return symbolicValue{expr: fmt.Sprintf("%t", *value), known: &known, boolean: true}
 	}
-	return symbolicValue{expr: expr}
+	return symbolicValue{expr: expr, boolean: true}
 }
 func compare(op byte, a, b int64) bool {
 	switch op {
@@ -405,6 +451,9 @@ func parseExportedFunction(wasm []byte, entrypoint string) (wasmFunction, error)
 			if err != nil {
 				return wasmFunction{}, err
 			}
+			if count > maxWasmVectorItems || imported > maxWasmVectorItems-count {
+				return wasmFunction{}, fmt.Errorf("too many wasm imports")
+			}
 			imported += count // imported functions are unsupported below
 		case 3:
 			functions, err = parseU32Vector(section)
@@ -451,7 +500,10 @@ func parseTypes(b []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([][]byte, 0, count)
+	if count > maxWasmVectorItems || int(count) > len(b) {
+		return nil, fmt.Errorf("too many wasm types")
+	}
+	out := make([][]byte, 0, int(count))
 	for range count {
 		if p >= len(b) || b[p] != 0x60 {
 			return nil, fmt.Errorf("invalid wasm function type")
@@ -462,7 +514,7 @@ func parseTypes(b []byte) ([][]byte, error) {
 			return nil, err
 		}
 		p = n
-		if int(pc) > len(b)-p {
+		if pc > maxWasmParams || int(pc) > len(b)-p {
 			return nil, fmt.Errorf("truncated function params")
 		}
 		sig := []byte{byte(pc)}
@@ -473,7 +525,7 @@ func parseTypes(b []byte) ([][]byte, error) {
 			return nil, err
 		}
 		p = n
-		if int(rc) > len(b)-p {
+		if rc > maxWasmParams || int(rc) > len(b)-p {
 			return nil, fmt.Errorf("truncated function results")
 		}
 		sig = append(sig, byte(rc))
@@ -488,7 +540,10 @@ func parseU32Vector(b []byte) ([]uint32, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]uint32, 0, count)
+	if count > maxWasmVectorItems || int(count) > len(b)-p {
+		return nil, fmt.Errorf("too many wasm vector items")
+	}
+	out := make([]uint32, 0, int(count))
 	for range count {
 		v, n, err := readU32(b, p)
 		if err != nil {
@@ -504,7 +559,10 @@ func parseExports(b []byte) (map[string]uint32, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]uint32{}
+	if count > maxWasmVectorItems || int(count) > len(b)-p {
+		return nil, fmt.Errorf("too many wasm exports")
+	}
+	out := make(map[string]uint32, int(count))
 	for range count {
 		n, q, err := readU32(b, p)
 		if err != nil || int(n) > len(b)-q {
@@ -533,7 +591,10 @@ func parseCodes(b []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([][]byte, 0, count)
+	if count > maxWasmVectorItems || int(count) > len(b)-p {
+		return nil, fmt.Errorf("too many wasm code bodies")
+	}
+	out := make([][]byte, 0, int(count))
 	for range count {
 		n, q, err := readU32(b, p)
 		if err != nil || int(n) > len(b)-q {
@@ -549,10 +610,13 @@ func parseCode(b []byte) ([]byte, []instruction, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if groups > maxWasmVectorItems || int(groups) > len(b)-p {
+		return nil, nil, fmt.Errorf("too many wasm local groups")
+	}
 	var locals []byte
 	for range groups {
 		n, q, err := readU32(b, p)
-		if err != nil || q >= len(b) {
+		if err != nil || q >= len(b) || n > maxWasmLocals || uint64(len(locals))+uint64(n) > maxWasmLocals {
 			return nil, nil, fmt.Errorf("invalid wasm locals")
 		}
 		p = q
@@ -576,6 +640,10 @@ func bytesRepeat(v byte, n int) []byte {
 	return r
 }
 func parseInstructions(b []byte, p int) ([]instruction, int, byte, error) {
+	return parseInstructionsWithBudget(b, p, new(int), 0)
+}
+
+func parseInstructionsWithBudget(b []byte, p int, instructionCount *int, controlDepth int) ([]instruction, int, byte, error) {
 	var out []instruction
 	for p < len(b) {
 		op := b[p]
@@ -584,19 +652,26 @@ func parseInstructions(b []byte, p int) ([]instruction, int, byte, error) {
 			return out, p, op, nil
 		}
 		in := instruction{opcode: op}
+		(*instructionCount)++
+		if *instructionCount > maxWasmInstructions {
+			return nil, p, 0, fmt.Errorf("too many wasm instructions")
+		}
 		var err error
 		switch op {
 		case 0x04:
+			if controlDepth >= maxWasmControlDepth {
+				return nil, p, 0, fmt.Errorf("wasm control nesting exceeds %d", maxWasmControlDepth)
+			}
 			if p >= len(b) {
 				return nil, p, 0, fmt.Errorf("truncated if")
 			}
 			p++
-			in.then, p, _, err = parseInstructions(b, p)
+			in.then, p, _, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
 			if err != nil {
 				return nil, p, 0, err
 			}
 			if p > 0 && b[p-1] == 0x05 {
-				in.otherwise, p, _, err = parseInstructions(b, p)
+				in.otherwise, p, _, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
 				if err != nil {
 					return nil, p, 0, err
 				}
@@ -652,6 +727,7 @@ func readS64(b []byte, p int) (int64, int, error) {
 func SymbolicHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
+		r.Body = http.MaxBytesReader(w, r.Body, maxSymbolicRequestBytes)
 		var input SymbolicInput
 		decoder := json.NewDecoder(r.Body)
 		decoder.DisallowUnknownFields()

@@ -49,10 +49,46 @@ func TestRun_RejectsInvalidInput(t *testing.T) {
 		{Module: "not base64", Entrypoint: "main"},
 		{Module: wasmReturningI32(1), Entrypoint: "missing"},
 		{Module: wasmReturningI32(1), Entrypoint: "main", MaxDepth: -1},
+		{Module: wasmReturningI32(1), Entrypoint: "main", MaxDepth: maxSymbolicMaxDepth + 1},
 	} {
 		if _, err := Run(context.Background(), input); err == nil {
 			t.Errorf("Run(%+v) error = nil, want validation error", input)
 		}
+	}
+}
+
+func TestSymbolicComparisonConditionPreservesBoolExpression(t *testing.T) {
+	t.Parallel()
+
+	state := symbolicState{locals: []symbolicValue{{expr: "arg0"}}}
+	for _, instruction := range []instruction{
+		{opcode: 0x20, index: 0},
+		{opcode: 0x41, value: 0},
+		{opcode: 0x46},
+	} {
+		if err := executeInstruction(&state, instruction); err != nil {
+			t.Fatalf("executeInstruction(%#x) error = %v", instruction.opcode, err)
+		}
+	}
+	condition, err := state.pop()
+	if err != nil {
+		t.Fatalf("pop() error = %v", err)
+	}
+	if got, want := condition.condition(), "(= arg0 0)"; got != want {
+		t.Errorf("condition() = %q, want %q", got, want)
+	}
+}
+
+func TestRun_EnforcesGlobalPathLimit(t *testing.T) {
+	t.Parallel()
+
+	_, err := Run(context.Background(), SymbolicInput{
+		Module:     wasmSequentialBranches(12),
+		Entrypoint: "main",
+		MaxDepth:   maxSymbolicMaxDepth,
+	})
+	if err == nil || !strings.Contains(err.Error(), "path limit") {
+		t.Fatalf("Run() error = %v, want global path limit error", err)
 	}
 }
 
@@ -138,6 +174,37 @@ func TestSymbolicHandler_RejectsInvalidRequest(t *testing.T) {
 	}
 }
 
+func TestSymbolicHandler_RejectsOversizedRequest(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(strings.Repeat("x", maxSymbolicRequestBytes+1)))
+	rec := httptest.NewRecorder()
+
+	SymbolicHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWasmParserRejectsOversizedVectors(t *testing.T) {
+	t.Parallel()
+
+	tooMany := []byte{0xff, 0xff, 0xff, 0xff, 0x0f}
+	if _, err := parseTypes(tooMany); err == nil {
+		t.Error("parseTypes() error = nil, want vector limit error")
+	}
+	if _, err := parseU32Vector(tooMany); err == nil {
+		t.Error("parseU32Vector() error = nil, want vector limit error")
+	}
+	if _, err := parseExports(tooMany); err == nil {
+		t.Error("parseExports() error = nil, want vector limit error")
+	}
+	if _, err := parseCodes(tooMany); err == nil {
+		t.Error("parseCodes() error = nil, want vector limit error")
+	}
+}
+
 func wasmReturningI32(value byte) string {
 	wasm := []byte{
 		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
@@ -161,4 +228,41 @@ func wasmNestedBranch() string {
 		0x05, 0x41, 0x03, 0x0b, 0x0b,
 	}
 	return base64.StdEncoding.EncodeToString(wasm)
+}
+
+func wasmSequentialBranches(count int) string {
+	body := []byte{0x00} // no locals
+	for range count {
+		body = append(body, 0x20, 0x00, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x41, 0x02, 0x0b)
+	}
+	body = append(body, 0x0b)
+
+	code := append([]byte{0x01}, wasmU32(uint32(len(body)))...)
+	code = append(code, body...)
+	wasm := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	wasm = append(wasm, wasmSection(1, []byte{0x01, 0x60, 0x01, 0x7f, 0x01, 0x7f})...)
+	wasm = append(wasm, wasmSection(3, []byte{0x01, 0x00})...)
+	wasm = append(wasm, wasmSection(7, []byte{0x01, 0x04, 'm', 'a', 'i', 'n', 0x00, 0x00})...)
+	wasm = append(wasm, wasmSection(10, code)...)
+	return base64.StdEncoding.EncodeToString(wasm)
+}
+
+func wasmSection(id byte, payload []byte) []byte {
+	section := append([]byte{id}, wasmU32(uint32(len(payload)))...)
+	return append(section, payload...)
+}
+
+func wasmU32(value uint32) []byte {
+	var out []byte
+	for {
+		b := byte(value & 0x7f)
+		value >>= 7
+		if value != 0 {
+			b |= 0x80
+		}
+		out = append(out, b)
+		if value == 0 {
+			return out
+		}
+	}
 }

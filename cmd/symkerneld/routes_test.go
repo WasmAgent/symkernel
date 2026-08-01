@@ -60,7 +60,7 @@ func TestRegisterRoutes(t *testing.T) {
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", nil)
 	srec := httptest.NewRecorder()
 	mux.ServeHTTP(srec, sreq)
-	if srec.Code == http.StatusNotFound {
-		t.Errorf("POST /v1/verify/symbolic status = 404; route not mounted by RegisterRoutes")
+	if srec.Code != http.StatusBadRequest {
+		t.Errorf("POST /v1/verify/symbolic status = %d, want %d; body = %s", srec.Code, http.StatusBadRequest, srec.Body.String())
 	}
 }
