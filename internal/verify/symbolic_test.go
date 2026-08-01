@@ -336,6 +336,16 @@ func TestWasmParserRejectsOversizedVectors(t *testing.T) {
 	}
 }
 
+func TestWasmParserRejectsIfElseTerminatedByElse(t *testing.T) {
+	t.Parallel()
+
+	// A second else cannot terminate an if's else arm. The final end here is
+	// for the function body, so accepting this would misassociate delimiters.
+	if _, _, err := parseCode([]byte{0x00, 0x04, 0x40, 0x05, 0x05, 0x0b}); err == nil {
+		t.Error("parseCode() error = nil, want invalid if error")
+	}
+}
+
 func wasmReturningI32(value byte) string {
 	wasm := []byte{
 		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,

@@ -915,14 +915,18 @@ func parseInstructionsWithBudget(b []byte, p int, instructionCount *int, control
 				return nil, p, 0, fmt.Errorf("truncated if")
 			}
 			p++
-			in.then, p, _, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
+			var stop byte
+			in.then, p, stop, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
 			if err != nil {
 				return nil, p, 0, err
 			}
-			if p > 0 && b[p-1] == 0x05 {
-				in.otherwise, p, _, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
+			if stop == 0x05 {
+				in.otherwise, p, stop, err = parseInstructionsWithBudget(b, p, instructionCount, controlDepth+1)
 				if err != nil {
 					return nil, p, 0, err
+				}
+				if stop != 0x0b {
+					return nil, p, 0, fmt.Errorf("invalid wasm if: else must end with end opcode")
 				}
 			}
 		case 0x20, 0x21, 0x22:
