@@ -57,6 +57,32 @@ func TestRun_RejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestRun_HandlesNonFunctionImportsBeforeEntrypoint(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name    string
+		imports []byte
+	}{
+		{name: "memory", imports: []byte{0x01, 0x01, 'm', 0x03, 'm', 'e', 'm', 0x02, 0x00, 0x01}},
+		{name: "table", imports: []byte{0x01, 0x01, 'm', 0x03, 't', 'a', 'b', 0x01, 0x70, 0x00, 0x01}},
+		{name: "global", imports: []byte{0x01, 0x01, 'm', 0x01, 'g', 0x03, valueI32, 0x00}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := Run(context.Background(), SymbolicInput{
+				Module:     wasmReturningI32WithImports(42, test.imports),
+				Entrypoint: "main",
+			})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if len(result.Paths) != 1 || result.Paths[0].Output != int32(42) {
+				t.Errorf("result = %+v, want one path with output 42", result)
+			}
+		})
+	}
+}
+
 func TestSymbolicComparisonConditionPreservesBoolExpression(t *testing.T) {
 	t.Parallel()
 
@@ -318,6 +344,16 @@ func wasmReturningI32(value byte) string {
 		0x07, 0x08, 0x01, 0x04, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00,
 		0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, value, 0x0b,
 	}
+	return base64.StdEncoding.EncodeToString(wasm)
+}
+
+func wasmReturningI32WithImports(value byte, imports []byte) string {
+	wasm := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	wasm = append(wasm, wasmSection(1, []byte{0x01, 0x60, 0x00, 0x01, valueI32})...)
+	wasm = append(wasm, wasmSection(2, imports)...)
+	wasm = append(wasm, wasmSection(3, []byte{0x01, 0x00})...)
+	wasm = append(wasm, wasmSection(7, []byte{0x01, 0x04, 'm', 'a', 'i', 'n', 0x00, 0x00})...)
+	wasm = append(wasm, wasmSection(10, []byte{0x01, 0x04, 0x00, 0x41, value, 0x0b})...)
 	return base64.StdEncoding.EncodeToString(wasm)
 }
 

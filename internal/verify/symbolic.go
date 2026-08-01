@@ -638,14 +638,10 @@ func parseExportedFunction(wasm []byte, entrypoint string) (wasmFunction, error)
 				return wasmFunction{}, err
 			}
 		case 2:
-			count, _, err := readU32(section, 0)
+			imported, err = parseImportedFunctionCount(section)
 			if err != nil {
 				return wasmFunction{}, err
 			}
-			if count > maxWasmVectorItems || imported > maxWasmVectorItems-count {
-				return wasmFunction{}, fmt.Errorf("too many wasm imports")
-			}
-			imported += count // imported functions are unsupported below
 		case 3:
 			functions, err = parseU32Vector(section)
 			if err != nil {
@@ -684,6 +680,75 @@ func parseExportedFunction(wasm []byte, entrypoint string) (wasmFunction, error)
 		return wasmFunction{}, err
 	}
 	return wasmFunction{params: params, results: results, locals: locals, body: body}, nil
+}
+
+// parseImportedFunctionCount returns the number of function imports in an
+// import section. Only function imports occupy function-index space; tables,
+// memories, and globals must still be consumed but do not offset local
+// function indices.
+func parseImportedFunctionCount(b []byte) (uint32, error) {
+	count, p, err := readU32(b, 0)
+	if err != nil {
+		return 0, err
+	}
+	if count > maxWasmVectorItems || int(count) > len(b)-p {
+		return 0, fmt.Errorf("too many wasm imports")
+	}
+	var functions uint32
+	for range count {
+		for range 2 { // module and import names
+			n, q, err := readU32(b, p)
+			if err != nil || int(n) > len(b)-q {
+				return 0, fmt.Errorf("invalid wasm import")
+			}
+			p = q + int(n)
+		}
+		if p >= len(b) {
+			return 0, fmt.Errorf("truncated wasm import")
+		}
+		switch b[p] {
+		case 0: // function: type index
+			functions++
+			_, p, err = readU32(b, p+1)
+		case 1: // table: reference type followed by limits
+			if p+1 >= len(b) {
+				return 0, fmt.Errorf("truncated wasm table import")
+			}
+			p, err = skipWasmLimits(b, p+2)
+		case 2: // memory: limits
+			p, err = skipWasmLimits(b, p+1)
+		case 3: // global: value type and mutability
+			if p+2 >= len(b) {
+				return 0, fmt.Errorf("truncated wasm global import")
+			}
+			p += 3
+		default:
+			return 0, fmt.Errorf("invalid wasm import kind")
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+	if p != len(b) {
+		return 0, fmt.Errorf("invalid wasm import section")
+	}
+	return functions, nil
+}
+
+func skipWasmLimits(b []byte, p int) (int, error) {
+	flags, p, err := readU32(b, p)
+	if err != nil {
+		return 0, err
+	}
+	if flags > 1 {
+		return 0, fmt.Errorf("unsupported wasm limits")
+	}
+	_, p, err = readU32(b, p)
+	if err != nil || flags == 0 {
+		return p, err
+	}
+	_, p, err = readU32(b, p)
+	return p, err
 }
 
 func parseTypes(b []byte) ([][]byte, error) {
