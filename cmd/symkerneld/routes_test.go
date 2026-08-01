@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,14 @@ func TestRegisterRoutes(t *testing.T) {
 	}
 	if sbody.Message != "Symbolic execution endpoint placeholder" {
 		t.Errorf("symbolic message = %q, want %q", sbody.Message, "Symbolic execution endpoint placeholder")
+	}
+
+	// The POST /v1/verify/taint route is mounted: malformed JSON is rejected by
+	// the taint handler (400) rather than falling through to the mux 404.
+	treq := httptest.NewRequest(http.MethodPost, "/v1/verify/taint", strings.NewReader("not json"))
+	trec := httptest.NewRecorder()
+	mux.ServeHTTP(trec, treq)
+	if trec.Code != http.StatusBadRequest {
+		t.Errorf("POST /v1/verify/taint status = %d, want %d; route may not be mounted; body = %s", trec.Code, http.StatusBadRequest, trec.Body.String())
 	}
 }
