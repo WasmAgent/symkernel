@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/WasmAgent/symkernel/internal/symbolic/cache"
 )
 
 // Result represents the outcome of an SMT2 constraint verification.
@@ -25,9 +27,18 @@ type Solver interface {
 // Z3Solver invokes the z3 SMT solver as an external process.
 type Z3Solver struct{}
 
+var z3DecisionCache = cache.NewFromEnv()
+
 // Solve sends smt2 to the z3 binary via stdin (SMTLIB2 interactive mode)
 // and parses the check-sat result and optional model output.
 func (z *Z3Solver) Solve(ctx context.Context, smt2 string) (Result, error) {
+	if err := ctx.Err(); err != nil {
+		return Result{Sat: "unknown"}, nil
+	}
+	if decision, ok := z3DecisionCache.Get(smt2); ok {
+		return Result{Sat: decision.Sat, Model: decision.Model}, nil
+	}
+
 	cmd := exec.CommandContext(ctx, "z3", "-in")
 	cmd.Stdin = strings.NewReader(smt2)
 
@@ -44,16 +55,19 @@ func (z *Z3Solver) Solve(ctx context.Context, smt2 string) (Result, error) {
 		return Result{}, fmt.Errorf("z3: empty output")
 	}
 
+	var result Result
 	switch lines[0] {
 	case "sat":
-		return Result{Sat: "sat", Model: parseModel(lines[1:])}, nil
+		result = Result{Sat: "sat", Model: parseModel(lines[1:])}
 	case "unsat":
-		return Result{Sat: "unsat", Model: nil}, nil
+		result = Result{Sat: "unsat", Model: nil}
 	case "unknown":
 		return Result{Sat: "unknown", Model: nil}, nil
 	default:
 		return Result{}, fmt.Errorf("z3: unexpected result %q", lines[0])
 	}
+	z3DecisionCache.Set(smt2, cache.Decision{Sat: result.Sat, Model: result.Model})
+	return result, nil
 }
 
 // parseModel extracts variable bindings from z3 model output lines.
