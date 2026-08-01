@@ -1,93 +1,674 @@
-// Package verify provides the symbolic and SMT verification primitives used
-// by symkerneld. The symbolic types in this file define the Milestone 3
-// contract that endpoint handlers wire against; Run is a stub until the
-// full Z3-backed symbolic exploration engine lands.
+// Package verify provides HTTP handlers for symkerneld verification endpoints.
 package verify
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
+	"github.com/WasmAgent/symkernel/internal/z3"
 	"github.com/google/uuid"
 )
 
-// ErrNotImplemented is returned by Run until the Z3-backed symbolic
-// exploration engine is implemented. Endpoint handlers should still wire
-// Run so the contract is exercised end-to-end while the engine matures.
-var ErrNotImplemented = errors.New("symbolic verification not implemented")
+const defaultSymbolicMaxDepth = 100
 
-// SymbolicInput is the request payload for symbolic verification: a base64
-// WebAssembly binary, the entry-point export to explore, and its arguments.
+// SymbolicInput is the request payload for POST /v1/verify/symbolic.
 type SymbolicInput struct {
-	// WasmBinary is the base64-encoded WebAssembly module to explore.
-	WasmBinary string `json:"wasmBinary"`
-	// Entry names the export (function) to begin symbolic execution from.
-	Entry string `json:"entry"`
-	// Args are the initial argument values passed to Entry.
-	Args []any `json:"args"`
+	Module          string `json:"module"`
+	Entrypoint      string `json:"entrypoint"`
+	MaxDepth        int    `json:"maxDepth"`
+	PruneInfeasible bool   `json:"pruneInfeasible"`
 }
 
-// SymbolicPath describes one feasible execution path discovered during
-// symbolic exploration: the guarding path constraint (SMT2) and a
-// satisfying model.
+// SymbolicPath is one terminal path reached by the entrypoint.
 type SymbolicPath struct {
-	// Constraints is the SMT2 path constraint that guards this path.
-	Constraints string `json:"constraints"`
-	// Model is a satisfying assignment for Constraints, keyed by symbol.
-	Model map[string]any `json:"model"`
+	ID          string   `json:"id"`
+	Feasible    bool     `json:"feasible"`
+	Constraints []string `json:"constraints"`
+	Output      any      `json:"output"`
 }
 
-// SymbolicResult holds the set of explored paths and bookkeeping fields.
+// SymbolicResult is the response payload for symbolic verification.
 type SymbolicResult struct {
-	// Paths is the set of feasible execution paths discovered.
-	Paths []SymbolicPath `json:"paths"`
-	// Explored is the total number of paths considered (feasible or not).
-	Explored int `json:"explored"`
-	// DecisionID is the per-call UUID, following the GENAI_SEMCONV field
-	// naming used across the WasmAgent ecosystem. Every response carries
-	// one for traceability — see CLAUDE.md "Bot instructions".
-	DecisionID string `json:"decision_id"`
+	Paths      []SymbolicPath `json:"paths"`
+	Explored   int            `json:"explored"`
+	Pruned     int            `json:"pruned"`
+	DecisionID string         `json:"decision_id"`
 }
 
-// Run executes symbolic exploration of in.WasmBinary starting at in.Entry.
-//
-// The engine is not yet implemented: Run always returns ErrNotImplemented
-// alongside a result whose DecisionID is populated with a fresh UUID, so
-// endpoint handlers can call it today and surface a decision_id to callers
-// while the Z3-backed implementation lands. When ctx is cancelled the stub
-// still returns the same sentinel rather than ctx.Err(), since no work is
-// performed.
+// Run symbolically executes the requested Wasm function. Function parameters
+// become arg0, arg1, ... integer symbols. It deliberately supports the core
+// integer/control-flow instruction set used for decisions; unsupported Wasm
+// instructions fail explicitly instead of silently falling back to concrete
+// execution.
 func Run(ctx context.Context, in SymbolicInput) (SymbolicResult, error) {
-	_ = ctx // no work performed by the stub; reserved for the real engine
-	_ = in
-	return SymbolicResult{DecisionID: uuid.NewString()}, ErrNotImplemented
-}
+	if strings.TrimSpace(in.Module) == "" {
+		return SymbolicResult{}, fmt.Errorf("module is required")
+	}
+	if strings.TrimSpace(in.Entrypoint) == "" {
+		return SymbolicResult{}, fmt.Errorf("entrypoint is required")
+	}
+	if in.MaxDepth < 0 {
+		return SymbolicResult{}, fmt.Errorf("maxDepth must not be negative")
+	}
+	if in.MaxDepth == 0 {
+		in.MaxDepth = defaultSymbolicMaxDepth
+	}
+	wasm, err := base64.StdEncoding.DecodeString(in.Module)
+	if err != nil {
+		return SymbolicResult{}, fmt.Errorf("decode module: %w", err)
+	}
+	fn, err := parseExportedFunction(wasm, in.Entrypoint)
+	if err != nil {
+		return SymbolicResult{}, err
+	}
 
-// symbolicPlaceholderResponse is the fixed acknowledgement body returned by
-// SymbolicHandler while the symbolic execution engine is being built.
-type symbolicPlaceholderResponse struct {
-	Message string `json:"message"`
-}
+	initial := symbolicState{locals: make([]symbolicValue, len(fn.params)+len(fn.locals))}
+	model := make(map[string]any, len(fn.params))
+	for i, typ := range fn.params {
+		if typ != valueI32 && typ != valueI64 {
+			return SymbolicResult{}, fmt.Errorf("entrypoint parameter %d has unsupported type 0x%x", i, typ)
+		}
+		name := fmt.Sprintf("arg%d", i)
+		initial.locals[i] = symbolicValue{expr: name}
+		model[name] = "Int"
+	}
 
-// SymbolicHandler returns an http.HandlerFunc for the POST /v1/verify/symbolic
-// endpoint.
-//
-// It is a placeholder: the route contract, middleware wiring, and content
-// type are exercised end-to-end, but no symbolic exploration is performed.
-// It always responds 200 OK with
-// {"message": "Symbolic execution endpoint placeholder"} so callers can detect
-// that the route is mounted while the Z3-backed engine behind Run matures. It
-// is a prerequisite for the full symbolic execution logic (issue #245): once
-// Run is implemented, this handler will decode a SymbolicInput, call Run, and
-// shape the SymbolicResult into the response.
-func SymbolicHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(symbolicPlaceholderResponse{
-			Message: "Symbolic execution endpoint placeholder",
+	exec := executor{ctx: ctx, maxDepth: in.MaxDepth, prune: in.PruneInfeasible, model: model, explored: 1}
+	states, err := exec.run(fn.body, []symbolicState{initial})
+	if err != nil {
+		return SymbolicResult{}, err
+	}
+	paths := make([]SymbolicPath, 0, len(states))
+	for _, state := range states {
+		feasible, err := exec.feasible(state.constraints)
+		if err != nil {
+			return SymbolicResult{}, err
+		}
+		if !feasible && in.PruneInfeasible {
+			exec.pruned++
+			continue
+		}
+		if len(state.stack) < len(fn.results) {
+			return SymbolicResult{}, fmt.Errorf("entrypoint %q did not produce its declared results", in.Entrypoint)
+		}
+		paths = append(paths, SymbolicPath{
+			ID: uuid.NewString(), Feasible: feasible, Constraints: state.constraints,
+			Output: state.output(fn.results),
 		})
+	}
+	return SymbolicResult{Paths: paths, Explored: exec.explored, Pruned: exec.pruned, DecisionID: uuid.NewString()}, nil
+}
+
+type symbolicValue struct {
+	expr  string
+	known *int64
+}
+
+func constant(v int64) symbolicValue { return symbolicValue{expr: fmt.Sprintf("%d", v), known: &v} }
+
+func (v symbolicValue) condition() string {
+	if v.known != nil {
+		if *v.known == 0 {
+			return "false"
+		}
+		return "true"
+	}
+	return "(not (= " + v.expr + " 0))"
+}
+
+type symbolicState struct {
+	locals      []symbolicValue
+	stack       []symbolicValue
+	constraints []string
+	depth       int
+}
+
+func (s symbolicState) clone() symbolicState {
+	s.locals = append([]symbolicValue(nil), s.locals...)
+	s.stack = append([]symbolicValue(nil), s.stack...)
+	s.constraints = append([]string(nil), s.constraints...)
+	return s
+}
+
+func (s *symbolicState) pop() (symbolicValue, error) {
+	if len(s.stack) == 0 {
+		return symbolicValue{}, fmt.Errorf("wasm stack underflow")
+	}
+	v := s.stack[len(s.stack)-1]
+	s.stack = s.stack[:len(s.stack)-1]
+	return v, nil
+}
+
+func (s symbolicState) output(results []byte) any {
+	if len(results) == 0 {
+		return nil
+	}
+	values := make([]any, len(results))
+	for i := range results {
+		v := s.stack[len(s.stack)-len(results)+i]
+		if v.known != nil {
+			if results[i] == valueI32 {
+				values[i] = int32(*v.known)
+			} else {
+				values[i] = *v.known
+			}
+		} else {
+			values[i] = v.expr
+		}
+	}
+	if len(values) == 1 {
+		return values[0]
+	}
+	return values
+}
+
+type instruction struct {
+	opcode    byte
+	index     uint32
+	value     int64
+	then      []instruction
+	otherwise []instruction
+}
+
+type executor struct {
+	ctx      context.Context
+	maxDepth int
+	prune    bool
+	model    map[string]any
+	explored int
+	pruned   int
+}
+
+func (e *executor) run(program []instruction, states []symbolicState) ([]symbolicState, error) {
+	for _, in := range program {
+		next := make([]symbolicState, 0, len(states))
+		for _, state := range states {
+			if err := e.ctx.Err(); err != nil {
+				return nil, err
+			}
+			state.depth++
+			if state.depth > e.maxDepth {
+				e.pruned++
+				continue
+			}
+			if in.opcode == 0x04 { // if
+				condition, err := state.pop()
+				if err != nil {
+					return nil, err
+				}
+				for _, branch := range []struct {
+					yes  bool
+					code []instruction
+				}{{true, in.then}, {false, in.otherwise}} {
+					candidate := state.clone()
+					constraint := condition.condition()
+					if !branch.yes {
+						constraint = "(not " + constraint + ")"
+					}
+					candidate.constraints = append(candidate.constraints, constraint)
+					e.explored++
+					if e.prune {
+						ok, err := e.feasible(candidate.constraints)
+						if err != nil {
+							return nil, err
+						}
+						if !ok {
+							e.pruned++
+							continue
+						}
+					}
+					finished, err := e.run(branch.code, []symbolicState{candidate})
+					if err != nil {
+						return nil, err
+					}
+					next = append(next, finished...)
+				}
+				continue
+			}
+			if err := executeInstruction(&state, in); err != nil {
+				return nil, err
+			}
+			next = append(next, state)
+		}
+		states = next
+	}
+	return states, nil
+}
+
+func (e *executor) feasible(constraints []string) (bool, error) {
+	if len(constraints) == 0 {
+		return true, nil
+	}
+	var b strings.Builder
+	for _, c := range constraints {
+		fmt.Fprintf(&b, "(assert %s)\n", c)
+	}
+	solution, err := z3.SolveConstraintsCtx(e.ctx, b.String(), e.model)
+	if err != nil {
+		return false, fmt.Errorf("check path feasibility: %w", err)
+	}
+	return solution.Sat != "unsat", nil
+}
+
+func executeInstruction(s *symbolicState, in instruction) error {
+	switch in.opcode {
+	case 0x20: // local.get
+		if int(in.index) >= len(s.locals) {
+			return fmt.Errorf("local index %d out of range", in.index)
+		}
+		s.stack = append(s.stack, s.locals[in.index])
+	case 0x21, 0x22: // local.set / local.tee
+		v, err := s.pop()
+		if err != nil {
+			return err
+		}
+		if int(in.index) >= len(s.locals) {
+			return fmt.Errorf("local index %d out of range", in.index)
+		}
+		s.locals[in.index] = v
+		if in.opcode == 0x22 {
+			s.stack = append(s.stack, v)
+		}
+	case 0x41, 0x42:
+		s.stack = append(s.stack, constant(in.value)) // i32/i64.const
+	case 0x45: // i32.eqz
+		v, err := s.pop()
+		if err != nil {
+			return err
+		}
+		var known *bool
+		if v.known != nil {
+			value := *v.known == 0
+			known = &value
+		}
+		s.stack = append(s.stack, boolValue("(= "+v.expr+" 0)", known))
+	case 0x46, 0x47, 0x48, 0x4a, 0x4c, 0x4e: // eq, ne, lt_s, gt_s, le_s, ge_s
+		b, err := s.pop()
+		if err != nil {
+			return err
+		}
+		a, err := s.pop()
+		if err != nil {
+			return err
+		}
+		op := map[byte]string{0x46: "=", 0x47: "distinct", 0x48: "<", 0x4a: ">", 0x4c: "<=", 0x4e: ">="}[in.opcode]
+		var known *bool
+		if a.known != nil && b.known != nil {
+			value := compare(in.opcode, *a.known, *b.known)
+			known = &value
+		}
+		s.stack = append(s.stack, boolValue("("+op+" "+a.expr+" "+b.expr+")", known))
+	case 0x6a, 0x6b, 0x6c: // i32.add/sub/mul
+		b, err := s.pop()
+		if err != nil {
+			return err
+		}
+		a, err := s.pop()
+		if err != nil {
+			return err
+		}
+		op := map[byte]string{0x6a: "+", 0x6b: "-", 0x6c: "*"}[in.opcode]
+		if a.known != nil && b.known != nil {
+			switch in.opcode {
+			case 0x6a:
+				s.stack = append(s.stack, constant(*a.known+*b.known))
+			case 0x6b:
+				s.stack = append(s.stack, constant(*a.known-*b.known))
+			default:
+				s.stack = append(s.stack, constant(*a.known**b.known))
+			}
+			return nil
+		}
+		s.stack = append(s.stack, symbolicValue{expr: "(" + op + " " + a.expr + " " + b.expr + ")"})
+	case 0x1a:
+		_, err := s.pop()
+		return err // drop
+	default:
+		return fmt.Errorf("unsupported symbolic wasm opcode 0x%x", in.opcode)
+	}
+	return nil
+}
+
+func boolValue(expr string, value *bool) symbolicValue {
+	if value != nil {
+		if *value {
+			return constant(1)
+		}
+		return constant(0)
+	}
+	return symbolicValue{expr: expr}
+}
+func compare(op byte, a, b int64) bool {
+	switch op {
+	case 0x46:
+		return a == b
+	case 0x47:
+		return a != b
+	case 0x48:
+		return a < b
+	case 0x4a:
+		return a > b
+	case 0x4c:
+		return a <= b
+	default:
+		return a >= b
+	}
+}
+
+const (
+	valueI32 byte = 0x7f
+	valueI64 byte = 0x7e
+)
+
+type wasmFunction struct {
+	params, results, locals []byte
+	body                    []instruction
+}
+
+func parseExportedFunction(wasm []byte, entrypoint string) (wasmFunction, error) {
+	if len(wasm) < 8 || string(wasm[:4]) != "\x00asm" || string(wasm[4:8]) != "\x01\x00\x00\x00" {
+		return wasmFunction{}, fmt.Errorf("invalid wasm module")
+	}
+	types := [][]byte{}
+	functions := []uint32{}
+	codes := [][]byte{}
+	exports := map[string]uint32{}
+	imported := uint32(0)
+	p := 8
+	for p < len(wasm) {
+		id := wasm[p]
+		p++
+		n, next, err := readU32(wasm, p)
+		if err != nil {
+			return wasmFunction{}, err
+		}
+		p = next
+		if int(n) > len(wasm)-p {
+			return wasmFunction{}, fmt.Errorf("truncated wasm section")
+		}
+		section := wasm[p : p+int(n)]
+		p += int(n)
+		switch id {
+		case 1:
+			var err error
+			types, err = parseTypes(section)
+			if err != nil {
+				return wasmFunction{}, err
+			}
+		case 2:
+			count, _, err := readU32(section, 0)
+			if err != nil {
+				return wasmFunction{}, err
+			}
+			imported += count // imported functions are unsupported below
+		case 3:
+			functions, err = parseU32Vector(section)
+			if err != nil {
+				return wasmFunction{}, err
+			}
+		case 7:
+			exports, err = parseExports(section)
+			if err != nil {
+				return wasmFunction{}, err
+			}
+		case 10:
+			codes, err = parseCodes(section)
+			if err != nil {
+				return wasmFunction{}, err
+			}
+		}
+	}
+	idx, ok := exports[entrypoint]
+	if !ok {
+		return wasmFunction{}, fmt.Errorf("entrypoint %q is not an exported function", entrypoint)
+	}
+	if idx < imported || int(idx-imported) >= len(functions) || int(idx-imported) >= len(codes) {
+		return wasmFunction{}, fmt.Errorf("entrypoint %q uses an unsupported imported function", entrypoint)
+	}
+	typeIndex := functions[idx-imported]
+	if int(typeIndex) >= len(types) {
+		return wasmFunction{}, fmt.Errorf("invalid entrypoint type")
+	}
+	typeSig := types[typeIndex]
+	paramsCount := int(typeSig[0])
+	resultsOffset := 1 + paramsCount
+	params := typeSig[1:resultsOffset]
+	results := typeSig[resultsOffset+1:]
+	locals, body, err := parseCode(codes[idx-imported])
+	if err != nil {
+		return wasmFunction{}, err
+	}
+	return wasmFunction{params: params, results: results, locals: locals, body: body}, nil
+}
+
+func parseTypes(b []byte) ([][]byte, error) {
+	count, p, err := readU32(b, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]byte, 0, count)
+	for range count {
+		if p >= len(b) || b[p] != 0x60 {
+			return nil, fmt.Errorf("invalid wasm function type")
+		}
+		p++
+		pc, n, err := readU32(b, p)
+		if err != nil {
+			return nil, err
+		}
+		p = n
+		if int(pc) > len(b)-p {
+			return nil, fmt.Errorf("truncated function params")
+		}
+		sig := []byte{byte(pc)}
+		sig = append(sig, b[p:p+int(pc)]...)
+		p += int(pc)
+		rc, n, err := readU32(b, p)
+		if err != nil {
+			return nil, err
+		}
+		p = n
+		if int(rc) > len(b)-p {
+			return nil, fmt.Errorf("truncated function results")
+		}
+		sig = append(sig, byte(rc))
+		sig = append(sig, b[p:p+int(rc)]...)
+		p += int(rc)
+		out = append(out, sig)
+	}
+	return out, nil
+}
+func parseU32Vector(b []byte) ([]uint32, error) {
+	count, p, err := readU32(b, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uint32, 0, count)
+	for range count {
+		v, n, err := readU32(b, p)
+		if err != nil {
+			return nil, err
+		}
+		p = n
+		out = append(out, v)
+	}
+	return out, nil
+}
+func parseExports(b []byte) (map[string]uint32, error) {
+	count, p, err := readU32(b, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]uint32{}
+	for range count {
+		n, q, err := readU32(b, p)
+		if err != nil || int(n) > len(b)-q {
+			return nil, fmt.Errorf("invalid wasm export")
+		}
+		name := string(b[q : q+int(n)])
+		p = q + int(n)
+		if p >= len(b) {
+			return nil, fmt.Errorf("truncated wasm export")
+		}
+		kind := b[p]
+		p++
+		idx, q, err := readU32(b, p)
+		if err != nil {
+			return nil, err
+		}
+		p = q
+		if kind == 0 {
+			out[name] = idx
+		}
+	}
+	return out, nil
+}
+func parseCodes(b []byte) ([][]byte, error) {
+	count, p, err := readU32(b, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]byte, 0, count)
+	for range count {
+		n, q, err := readU32(b, p)
+		if err != nil || int(n) > len(b)-q {
+			return nil, fmt.Errorf("invalid wasm code")
+		}
+		out = append(out, b[q:q+int(n)])
+		p = q + int(n)
+	}
+	return out, nil
+}
+func parseCode(b []byte) ([]byte, []instruction, error) {
+	groups, p, err := readU32(b, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	var locals []byte
+	for range groups {
+		n, q, err := readU32(b, p)
+		if err != nil || q >= len(b) {
+			return nil, nil, fmt.Errorf("invalid wasm locals")
+		}
+		p = q
+		locals = append(locals, bytesRepeat(b[p], int(n))...)
+		p++
+	}
+	body, p, stop, err := parseInstructions(b, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	if stop != 0x0b || p != len(b) {
+		return nil, nil, fmt.Errorf("invalid wasm function body")
+	}
+	return locals, body, nil
+}
+func bytesRepeat(v byte, n int) []byte {
+	r := make([]byte, n)
+	for i := range r {
+		r[i] = v
+	}
+	return r
+}
+func parseInstructions(b []byte, p int) ([]instruction, int, byte, error) {
+	var out []instruction
+	for p < len(b) {
+		op := b[p]
+		p++
+		if op == 0x0b || op == 0x05 {
+			return out, p, op, nil
+		}
+		in := instruction{opcode: op}
+		var err error
+		switch op {
+		case 0x04:
+			if p >= len(b) {
+				return nil, p, 0, fmt.Errorf("truncated if")
+			}
+			p++
+			in.then, p, _, err = parseInstructions(b, p)
+			if err != nil {
+				return nil, p, 0, err
+			}
+			if p > 0 && b[p-1] == 0x05 {
+				in.otherwise, p, _, err = parseInstructions(b, p)
+				if err != nil {
+					return nil, p, 0, err
+				}
+			}
+		case 0x20, 0x21, 0x22:
+			in.index, p, err = readU32(b, p)
+		case 0x41, 0x42:
+			in.value, p, err = readS64(b, p)
+		}
+		if err != nil {
+			return nil, p, 0, err
+		}
+		out = append(out, in)
+	}
+	return nil, p, 0, fmt.Errorf("unterminated wasm instructions")
+}
+func readU32(b []byte, p int) (uint32, int, error) {
+	var v uint32
+	for i := 0; i < 5; i++ {
+		if p >= len(b) {
+			return 0, p, fmt.Errorf("truncated wasm integer")
+		}
+		x := b[p]
+		p++
+		v |= uint32(x&127) << uint(7*i)
+		if x&128 == 0 {
+			return v, p, nil
+		}
+	}
+	return 0, p, fmt.Errorf("invalid wasm integer")
+}
+func readS64(b []byte, p int) (int64, int, error) {
+	var v int64
+	var shift uint
+	for {
+		if p >= len(b) || shift >= 64 {
+			return 0, p, fmt.Errorf("invalid wasm signed integer")
+		}
+		x := b[p]
+		p++
+		v |= int64(x&127) << shift
+		shift += 7
+		if x&128 == 0 {
+			if shift < 64 && x&64 != 0 {
+				v |= ^int64(0) << shift
+			}
+			return v, p, nil
+		}
+	}
+}
+
+// SymbolicHandler returns the POST /v1/verify/symbolic endpoint handler.
+func SymbolicHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var input SymbolicInput
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			http.Error(w, fmt.Sprintf("invalid request: %v", err), http.StatusBadRequest)
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			http.Error(w, "invalid request: multiple JSON values", http.StatusBadRequest)
+			return
+		}
+		result, err := Run(r.Context(), input)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("invalid symbolic execution request: %v", err), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
 	}
 }

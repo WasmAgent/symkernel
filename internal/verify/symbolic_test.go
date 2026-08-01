@@ -2,8 +2,8 @@ package verify
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,146 +12,153 @@ import (
 	"github.com/google/uuid"
 )
 
-// TestRun_NotImplementedStub asserts the documented stub behaviour: Run
-// returns ErrNotImplemented together with a result carrying a valid,
-// freshly generated DecisionID, regardless of input.
-func TestRun_NotImplementedStub(t *testing.T) {
+func TestRun_ExecutesEntrypoint(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-		in   SymbolicInput
-	}{
-		{
-			name: "empty input",
-			in:   SymbolicInput{},
-		},
-		{
-			name: "populated input",
-			in: SymbolicInput{
-				WasmBinary: "AGVzbQ==", // arbitrary base64; not decoded by the stub
-				Entry:      "_start",
-				Args:       []any{1, "two", true},
-			},
-		},
+	result, err := Run(context.Background(), SymbolicInput{
+		Module:     wasmReturningI32(42),
+		Entrypoint: "main",
+		MaxDepth:   100,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			res, err := Run(context.Background(), tt.in)
-
-			if !errors.Is(err, ErrNotImplemented) {
-				t.Fatalf("err = %v, want ErrNotImplemented", err)
-			}
-
-			// The stub always returns a fresh decision UUID so handlers can
-			// surface a decision_id even before the engine is implemented.
-			if res.DecisionID == "" {
-				t.Fatal("DecisionID is empty, want a generated UUID")
-			}
-			if _, parseErr := uuid.Parse(res.DecisionID); parseErr != nil {
-				t.Errorf("DecisionID = %q is not a valid UUID: %v", res.DecisionID, parseErr)
-			}
-
-			// No paths are explored by the stub.
-			if len(res.Paths) != 0 {
-				t.Errorf("Paths len = %d, want 0", len(res.Paths))
-			}
-			if res.Explored != 0 {
-				t.Errorf("Explored = %d, want 0", res.Explored)
-			}
-		})
+	if result.Explored != 1 || result.Pruned != 0 {
+		t.Errorf("bookkeeping = explored:%d pruned:%d, want 1 and 0", result.Explored, result.Pruned)
+	}
+	if len(result.Paths) != 1 {
+		t.Fatalf("paths = %d, want 1", len(result.Paths))
+	}
+	path := result.Paths[0]
+	if !path.Feasible || len(path.Constraints) != 0 || path.Output != int32(42) {
+		t.Errorf("path = %+v, want feasible empty-constraint path with output 42", path)
+	}
+	if _, err := uuid.Parse(path.ID); err != nil {
+		t.Errorf("path ID = %q is not a UUID: %v", path.ID, err)
+	}
+	if _, err := uuid.Parse(result.DecisionID); err != nil {
+		t.Errorf("decision ID = %q is not a UUID: %v", result.DecisionID, err)
 	}
 }
 
-// TestRun_ToleratesCancelledContext confirms the stub mints a decision_id
-// even when the caller's context is already cancelled — no work is
-// performed, so the sentinel is returned rather than ctx.Err().
-func TestRun_ToleratesCancelledContext(t *testing.T) {
+func TestRun_RejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	res, err := Run(ctx, SymbolicInput{})
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("err = %v, want ErrNotImplemented", err)
-	}
-	if res.DecisionID == "" {
-		t.Fatal("DecisionID is empty, want a generated UUID")
+	for _, input := range []SymbolicInput{
+		{},
+		{Module: "not base64", Entrypoint: "main"},
+		{Module: wasmReturningI32(1), Entrypoint: "missing"},
+		{Module: wasmReturningI32(1), Entrypoint: "main", MaxDepth: -1},
+	} {
+		if _, err := Run(context.Background(), input); err == nil {
+			t.Errorf("Run(%+v) error = nil, want validation error", input)
+		}
 	}
 }
 
-// TestRun_DecisionIDIsUnique confirms each call mints a distinct decision_id.
-func TestRun_DecisionIDIsUnique(t *testing.T) {
+func TestRun_ExploresBranchesAndHonorsControls(t *testing.T) {
 	t.Parallel()
 
-	a, errA := Run(context.Background(), SymbolicInput{})
-	b, errB := Run(context.Background(), SymbolicInput{})
+	input := SymbolicInput{Module: wasmNestedBranch(), Entrypoint: "main", MaxDepth: 100}
+	withoutPruning, err := Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Run() without pruning error = %v", err)
+	}
+	if withoutPruning.Explored != 5 || withoutPruning.Pruned != 0 || len(withoutPruning.Paths) != 3 {
+		t.Fatalf("without pruning = %+v, want five explored and three returned paths", withoutPruning)
+	}
+	var infeasible int
+	for _, path := range withoutPruning.Paths {
+		if !path.Feasible {
+			infeasible++
+		}
+	}
+	if infeasible != 1 {
+		t.Errorf("infeasible paths = %d, want 1", infeasible)
+	}
 
-	if !errors.Is(errA, ErrNotImplemented) || !errors.Is(errB, ErrNotImplemented) {
-		t.Fatalf("errors = %v, %v; both want ErrNotImplemented", errA, errB)
+	input.PruneInfeasible = true
+	pruned, err := Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Run() with pruning error = %v", err)
 	}
-	if a.DecisionID == "" {
-		t.Fatal("first DecisionID is empty")
+	if pruned.Explored != 5 || pruned.Pruned != 1 || len(pruned.Paths) != 2 {
+		t.Errorf("with pruning = %+v, want 5 explored, 1 pruned, 2 paths", pruned)
 	}
-	if a.DecisionID == b.DecisionID {
-		t.Fatalf("DecisionIDs collided: %s", a.DecisionID)
+
+	input.MaxDepth = 1
+	depthLimited, err := Run(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Run() with depth limit error = %v", err)
+	}
+	if len(depthLimited.Paths) != 0 || depthLimited.Pruned == 0 {
+		t.Errorf("depth-limited result = %+v, want no completed paths and pruned work", depthLimited)
 	}
 }
 
-// TestSymbolicHandler_Placeholder asserts the documented placeholder
-// behaviour: SymbolicHandler always responds 200 OK with the fixed
-// acknowledgement body and a JSON content type, regardless of the request
-// body, so the /v1/verify/symbolic route contract is exercised end-to-end
-// while the symbolic engine matures.
-func TestSymbolicHandler_Placeholder(t *testing.T) {
+func TestSymbolicHandler(t *testing.T) {
 	t.Parallel()
 
-	handler := SymbolicHandler()
-
-	// The handler is a placeholder that ignores the body; send a plausible
-	// symbolic request to prove no parsing is attempted yet.
-	body := `{"input":{"wasmBinary":"AGVzbQ==","entry":"_start","args":[]}}`
+	body := `{"module":"` + wasmReturningI32(7) + `","entrypoint":"main","maxDepth":100,"pruneInfeasible":true}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	SymbolicHandler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
-		t.Errorf("Content-Type = %q, want %q", ct, "application/json")
+	if contentType := rec.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", contentType)
 	}
-
-	var resp symbolicPlaceholderResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v; body = %s", err, rec.Body.String())
+	var result SymbolicResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
 	}
-	const want = "Symbolic execution endpoint placeholder"
-	if resp.Message != want {
-		t.Errorf("message = %q, want %q", resp.Message, want)
+	if len(result.Paths) != 1 || result.Paths[0].Output != float64(7) {
+		t.Errorf("response = %+v, want one path with output 7", result)
 	}
 }
 
-// TestSymbolicHandler_IgnoresEmptyBody confirms the placeholder responds 200
-// even when no body is posted, matching how the route is exercised through the
-// registered mux (e.g. liveness-style probes).
-func TestSymbolicHandler_IgnoresEmptyBody(t *testing.T) {
+func TestSymbolicHandler_RejectsInvalidRequest(t *testing.T) {
 	t.Parallel()
 
-	handler := SymbolicHandler()
+	for _, body := range []string{
+		`{"module":"not-base64","entrypoint":"main"}`,
+		`{"module":"` + wasmReturningI32(1) + `","entrypoint":"main"} {}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(body))
+		rec := httptest.NewRecorder()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", nil)
-	rec := httptest.NewRecorder()
+		SymbolicHandler().ServeHTTP(rec, req)
 
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
 	}
+}
+
+func wasmReturningI32(value byte) string {
+	wasm := []byte{
+		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+		0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
+		0x03, 0x02, 0x01, 0x00,
+		0x07, 0x08, 0x01, 0x04, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00,
+		0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, value, 0x0b,
+	}
+	return base64.StdEncoding.EncodeToString(wasm)
+}
+
+func wasmNestedBranch() string {
+	wasm := []byte{
+		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+		0x01, 0x06, 0x01, 0x60, 0x01, 0x7f, 0x01, 0x7f,
+		0x03, 0x02, 0x01, 0x00,
+		0x07, 0x08, 0x01, 0x04, 0x6d, 0x61, 0x69, 0x6e, 0x00, 0x00,
+		0x0a, 0x16, 0x01, 0x14, 0x00,
+		0x20, 0x00, 0x04, 0x7f,
+		0x20, 0x00, 0x04, 0x7f, 0x41, 0x01, 0x05, 0x41, 0x02, 0x0b,
+		0x05, 0x41, 0x03, 0x0b, 0x0b,
+	}
+	return base64.StdEncoding.EncodeToString(wasm)
 }
