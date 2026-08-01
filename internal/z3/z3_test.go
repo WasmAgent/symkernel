@@ -197,6 +197,28 @@ func TestSolveConstraints_SatIntegration(t *testing.T) {
 	}
 }
 
+func TestSolveConstraints_CacheHitReportsTimingIntegration(t *testing.T) {
+	if _, err := exec.LookPath("z3"); err != nil {
+		t.Skip("z3 not on PATH")
+	}
+
+	constraints := "(assert (> cache_timing_unique 5))"
+	model := map[string]any{"cache_timing_unique": "Int"}
+	if _, err := SolveConstraints(constraints, model); err != nil {
+		t.Fatalf("warm cache: %v", err)
+	}
+	got, err := SolveConstraints(constraints, model)
+	if err != nil {
+		t.Fatalf("cache hit: %v", err)
+	}
+	if got.Sat != "sat" {
+		t.Errorf("Sat = %q, want sat", got.Sat)
+	}
+	if got.SolverMs <= 0 {
+		t.Errorf("SolverMs = %d on cache hit, want positive elapsed timing", got.SolverMs)
+	}
+}
+
 func TestSolveConstraints_UnsatIntegration(t *testing.T) {
 	if _, err := exec.LookPath("z3"); err != nil {
 		t.Skip("z3 not on PATH")

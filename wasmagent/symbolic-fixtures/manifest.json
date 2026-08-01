@@ -1,0 +1,40 @@
+{
+  "fixtures": [
+    {
+      "name": "bounded-loop",
+      "module": "bounded-loop.wasm.b64",
+      "entry": "run",
+      "arguments": [],
+      "branch_points": 2,
+      "paths": [
+        {"constraints": "(assert (= input 0))", "model": {"input": "Int"}},
+        {"constraints": "(assert (and (> input 0) (<= input 4)))", "model": {"input": "Int"}}
+      ]
+    },
+    {
+      "name": "recursion",
+      "module": "recursion.wasm.b64",
+      "entry": "run",
+      "arguments": [3],
+      "branch_points": 3,
+      "paths": [
+        {"constraints": "(assert (= depth 0))", "model": {"depth": "Int"}},
+        {"constraints": "(assert (= depth 1))", "model": {"depth": "Int"}},
+        {"constraints": "(assert (and (> depth 1) (<= depth 3)))", "model": {"depth": "Int"}}
+      ]
+    },
+    {
+      "name": "data-dependent-branches",
+      "module": "data-dependent-branches.wasm.b64",
+      "entry": "run",
+      "arguments": [1, 0],
+      "branch_points": 2,
+      "paths": [
+        {"constraints": "(assert (and (= left 0) (= right 0)))", "model": {"left": "Int", "right": "Int"}},
+        {"constraints": "(assert (and (= left 0) (> right 0)))", "model": {"left": "Int", "right": "Int"}},
+        {"constraints": "(assert (and (> left 0) (= right 0)))", "model": {"left": "Int", "right": "Int"}},
+        {"constraints": "(assert (and (> left 0) (> right 0)))", "model": {"left": "Int", "right": "Int"}}
+      ]
+    }
+  ]
+}
