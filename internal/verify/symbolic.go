@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -30,6 +31,11 @@ const (
 	maxWasmInstructions      = 16384
 	maxWasmControlDepth      = 256
 )
+
+// ErrNotImplemented is retained for source compatibility with callers of the
+// original symbolic-verification scaffold. Run is implemented and no longer
+// returns this sentinel.
+var ErrNotImplemented = errors.New("symbolic verification not implemented")
 
 // SymbolicInput is the request payload for POST /v1/verify/symbolic.
 // Module, Entrypoint, MaxDepth, and PruneInfeasible are the v12 endpoint

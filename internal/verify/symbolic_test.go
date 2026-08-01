@@ -305,6 +305,23 @@ func TestSymbolicHandler_RejectsInvalidRequest(t *testing.T) {
 	}
 }
 
+func TestSymbolicHandler_RejectsNullAndEmptyObject(t *testing.T) {
+	t.Parallel()
+
+	for _, body := range []string{"null", "{}"} {
+		t.Run(body, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(body))
+			rec := httptest.NewRecorder()
+
+			SymbolicHandler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestSymbolicHandler_RejectsOversizedRequest(t *testing.T) {
 	t.Parallel()
 
