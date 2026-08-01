@@ -25,12 +25,20 @@ type Solution struct {
 	// UnsatCore holds named assertion labels forming the minimal unsat core
 	// when Sat is "unsat" and the input used named assertions.
 	UnsatCore []string `json:"unsat_core,omitempty"`
-	// SolverMs is the elapsed wall-clock time in the Z3 subprocess, in
-	// milliseconds.
+	// SolverMs is the elapsed wall-clock time handling the query, in
+	// milliseconds. Cache hits report cache-lookup time; cache misses report
+	// the Z3 subprocess time.
 	SolverMs int64 `json:"solver_ms"`
 }
 
 var decisionCache = cache.NewFromEnv()
+
+// CacheStats reports aggregate activity for the solver decision cache. It is
+// exposed so benchmark suites can report cache hit ratios without reaching
+// into the cache implementation.
+func CacheStats() cache.Stats {
+	return decisionCache.Stats()
+}
 
 // SolveConstraints submits an SMTLIB2 constraint string to Z3 and returns the
 // result. model is an optional map of variable name → sort hint (or concrete
@@ -58,11 +66,11 @@ func SolveConstraintsCtx(ctx context.Context, constraints string, model map[stri
 	if err := ctx.Err(); err != nil {
 		return Solution{Sat: "unknown"}, nil
 	}
+	start := time.Now()
 	if decision, ok := decisionCache.Get(smt2); ok {
-		return solutionFromDecision(decision), nil
+		return solutionFromDecision(decision, time.Since(start)), nil
 	}
 
-	start := time.Now()
 	cmd := exec.CommandContext(ctx, "z3", "-in")
 	cmd.Stdin = strings.NewReader(smt2)
 
@@ -114,12 +122,25 @@ func decisionFromSolution(solution Solution) cache.Decision {
 	}
 }
 
-func solutionFromDecision(decision cache.Decision) Solution {
+func solutionFromDecision(decision cache.Decision, elapsed time.Duration) Solution {
 	return Solution{
 		Sat:       decision.Sat,
 		Model:     decision.Model,
 		UnsatCore: decision.UnsatCore,
+		SolverMs:  elapsedMillis(elapsed),
 	}
+}
+
+// elapsedMillis rounds a completed query up to one millisecond so callers do
+// not mistake a fast cache hit for missing timing metadata.
+func elapsedMillis(elapsed time.Duration) int64 {
+	if elapsed <= 0 {
+		return 0
+	}
+	if millis := elapsed.Milliseconds(); millis > 0 {
+		return millis
+	}
+	return 1
 }
 
 // hasNamedAssertions reports whether the constraints string uses SMTLIB2
