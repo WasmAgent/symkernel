@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -55,21 +56,49 @@ func TestRegisterRoutes(t *testing.T) {
 		t.Errorf("POST /v1/verify/z3 status = 404; route not mounted by RegisterRoutes")
 	}
 
-	// The POST /v1/verify/symbolic placeholder route is mounted and responds
-	// 200 with its placeholder body, proving RegisterRoutes wired it.
+	// The POST /v1/verify/symbolic route is mounted: an empty request is
+	// rejected by its handler rather than falling through to the mux 404.
 	sreq := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", nil)
 	srec := httptest.NewRecorder()
 	mux.ServeHTTP(srec, sreq)
-	if srec.Code != http.StatusOK {
-		t.Fatalf("POST /v1/verify/symbolic status = %d, want %d; route not mounted or wrong handler; body = %s", srec.Code, http.StatusOK, srec.Body.String())
+	if srec.Code != http.StatusBadRequest {
+		t.Errorf("POST /v1/verify/symbolic status = %d, want %d; body = %s", srec.Code, http.StatusBadRequest, srec.Body.String())
 	}
-	var sbody struct {
-		Message string `json:"message"`
+}
+
+func TestRegisterRoutes_SymbolicExecution(t *testing.T) {
+	// This is a Wasm module which exports main() -> i32 and returns 7.
+	const module = "AGFzbQEAAAABBQFgAAF/AwIBAAcIAQRtYWluAAAKBgEEAEEHCw=="
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify/symbolic", strings.NewReader(
+		`{"module":"`+module+`","entrypoint":"main","maxDepth":100,"pruneInfeasible":true}`,
+	))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /v1/verify/symbolic status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if err := json.NewDecoder(srec.Body).Decode(&sbody); err != nil {
-		t.Fatalf("decode symbolic placeholder body: %v; body = %s", err, srec.Body.String())
+	var response struct {
+		Paths []struct {
+			Feasible    bool     `json:"feasible"`
+			Constraints []string `json:"constraints"`
+			Output      float64  `json:"output"`
+		} `json:"paths"`
+		Explored int `json:"explored"`
+		Pruned   int `json:"pruned"`
 	}
-	if sbody.Message != "Symbolic execution endpoint placeholder" {
-		t.Errorf("symbolic message = %q, want %q", sbody.Message, "Symbolic execution endpoint placeholder")
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode symbolic response: %v", err)
+	}
+	if response.Explored != 1 || response.Pruned != 0 || len(response.Paths) != 1 {
+		t.Fatalf("symbolic response = %+v, want one explored feasible path", response)
+	}
+	path := response.Paths[0]
+	if !path.Feasible || len(path.Constraints) != 0 || path.Output != 7 {
+		t.Errorf("symbolic path = %+v, want feasible path with output 7", path)
 	}
 }
