@@ -12,6 +12,7 @@ import (
 	"github.com/WasmAgent/symkernel/internal/orchestrator"
 	"github.com/WasmAgent/symkernel/internal/otel"
 	smthttp "github.com/WasmAgent/symkernel/internal/smthttp"
+	"github.com/WasmAgent/symkernel/internal/symbolic/taint"
 	"github.com/WasmAgent/symkernel/internal/verify"
 )
 
@@ -25,6 +26,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /v1/verify/z3", verify.Handler(&verify.Z3Solver{}))
 	mux.Handle("POST /v1/verify/criterion", criterion.Handler())
 	mux.Handle("POST /v1/verify/symbolic", verify.SymbolicHandler())
+	mux.Handle("POST /v1/verify/taint", taint.Handler())
 
 	// Milestone 12: Z3 SMT solver integration.
 	mux.Handle("POST /v1/verify/smt", smthttp.Handler())
