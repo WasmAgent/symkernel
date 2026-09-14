@@ -242,3 +242,5 @@ Key environment variables:
 `schemas/` holds `constraint-ir.schema.json` and `constraint-violation.schema.json` pinned from `wasmagent-js`. `make sync-schemas` refreshes them; CI fails on drift.
 
 Part of the [WasmAgent](https://github.com/WasmAgent) ecosystem.
+
+<!-- n4 verify irrelevant-path required-summary behavior -->
