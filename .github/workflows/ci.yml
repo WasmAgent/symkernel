@@ -43,5 +43,5 @@ jobs:
         run: |
           # SK-04: pinned — @latest in required CI is forbidden by the org
           # assurance baseline.
-          go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
           staticcheck -checks all ./...
