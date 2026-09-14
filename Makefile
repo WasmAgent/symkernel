@@ -1,6 +1,7 @@
 # SK-2: pinned to the version in the org certified stack
 # (aep-certified-2026-09-13-03 / @wasmagent/protocol 0.1.10).
-PROTOCOL_PACKAGE := @wasmagent/protocol@0.1.10
+PROTOCOL_VERSION := 0.1.10
+PROTOCOL_PACKAGE := @wasmagent/protocol@$(PROTOCOL_VERSION)
 # SK-1: repo root — relative paths used to resolve inside the mktemp dir,
 # so sync-schemas wrote into a directory that was deleted on exit.
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -41,8 +42,10 @@ sync-schemas:
 	@set -eu; \
 	tmpdir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmpdir"' EXIT; \
-	npm pack $(PROTOCOL_PACKAGE) --silent > /dev/null; \
-	tar -xzf wasmagent-protocol-*.tgz -C "$$tmpdir"; \
+	npm pack $(PROTOCOL_PACKAGE) --silent --pack-destination "$$tmpdir" > /dev/null; \
+	tgz="$$tmpdir"/wasmagent-protocol-$(PROTOCOL_VERSION).tgz; \
+	node scripts/verify-protocol-lock.mjs "$$tgz"; \
+	tar -xzf "$$tgz" -C "$$tmpdir"; \
 	mkdir -p "$(ROOT_DIR)/schemas"; \
 	for file in $(SCHEMA_FILES); do \
 		cp "$$tmpdir/package/schemas/compliance/$$file" "$(ROOT_DIR)/schemas/$$file"; \
@@ -52,8 +55,10 @@ check-schemas:
 	@set -eu; \
 	tmpdir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmpdir"' EXIT; \
-	npm pack $(PROTOCOL_PACKAGE) --silent > /dev/null; \
-	tar -xzf wasmagent-protocol-*.tgz -C "$$tmpdir"; \
+	npm pack $(PROTOCOL_PACKAGE) --silent --pack-destination "$$tmpdir" > /dev/null; \
+	tgz="$$tmpdir"/wasmagent-protocol-$(PROTOCOL_VERSION).tgz; \
+	node scripts/verify-protocol-lock.mjs "$$tgz"; \
+	tar -xzf "$$tgz" -C "$$tmpdir"; \
 	for file in $(SCHEMA_FILES); do \
 		if ! cmp -s "$(ROOT_DIR)/schemas/$$file" "$$tmpdir/package/schemas/compliance/$$file"; then \
 			echo "schemas/$$file drifted from $(PROTOCOL_PACKAGE)"; \

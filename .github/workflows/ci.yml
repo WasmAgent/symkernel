@@ -19,8 +19,9 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Install Z3
+      - name: "Install Z3 and record exact tested solver version (SK-04)"
         run: |
+          set -euo pipefail
           sudo apt-get install -y z3
           z3 --version
 
@@ -48,3 +49,27 @@ jobs:
           # assurance baseline.
           go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
           staticcheck -checks all ./...
+
+      # SK-04: record the exact toolchain the required CI actually ran against.
+      # A version range ("4.13.x or later") is not evidence; this snapshot is.
+      - name: Record tested toolchain (SK-04)
+        run: |
+          set -euo pipefail
+          cat > tested-toolchain.json <<EOF
+          {
+            "go": "$(go version | awk '{print $3}')",
+            "z3": "$(z3 --version | awk '{print $3}')",
+            "staticcheck": "v0.8.1",
+            "golangci-lint": "v2.12.2",
+            "protocol_version": "$(grep -E '^PROTOCOL_VERSION' Makefile | awk '{print $3}')",
+            "source_sha": "${GITHUB_SHA}"
+          }
+          EOF
+          cat tested-toolchain.json
+
+      - name: Upload tested toolchain
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tested-toolchain-${{ github.sha }}
+          path: tested-toolchain.json
+          retention-days: 90

@@ -41,7 +41,7 @@ Provides a three-tier reasoning service over HTTP consumed by `wasmagent-js`,
 | AEP evidence **emission** at runtime | `wasmagent-js` (`@wasmagent/aep`) |
 | MCP firewall, process-level policy enforcement | `wasmagent-js` (`@wasmagent/mcp-gateway`) |
 | Gateway-level HTTP evidence (Proxy-Wasm) | `wasmagent-proxy` |
-| AgentBOM / MCP Posture specifications | `agent-trust-infra` |
+| AgentBOM / MCP Posture specifications | `wasmagent-protocol` (canonical schemas); `agentbom` (implementation) — `agent-trust-infra` is archived |
 | Trust Passport specification and product | `open-agent-audit` (`@openagentaudit/passport`) |
 | Enterprise audit report generation | `open-agent-audit` |
 | Training data pipeline | `trace-pipeline` |

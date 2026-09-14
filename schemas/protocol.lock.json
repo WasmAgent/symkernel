@@ -1,0 +1,19 @@
+{
+  "format": "wasmagent-protocol-vendor-lock/v1",
+  "package": "@wasmagent/protocol",
+  "version": "0.1.10",
+  "aep_certified_target": "aep-certified-2026-09-13-03",
+  "registry_integrity": "sha512-mnJVyK7KvbrXxJ+H0eaDDMBxzqCE6cd4RIoZWm8citfHROA1/KRb3Qr88jUQrYtPv+BbqJtniT2+cuZ3TzuwvA==",
+  "registry_shasum": "b8d49c2423f456a918ca36160eebb833fc501d71",
+  "tarball_sha256": "60d79a35cbe9b057391b275dd3970cac1e810e11664f4497ba6b5f979b829963",
+  "tarball_sha512": "9a7255c8aecabdbad7c49f87d1e6830cc071cea084e9c778448a195a6f1c8ad7c744e035fca45bdd0afcf23510ad8b4fbfe05ba89b67893dbe72e6774f3bb0bc",
+  "vendored_schemas": {
+    "constraint-ir.schema.json": "c8fa65c0409bb6538feeb91e1c7cb593a2d75114d55713f7398ec288236303da",
+    "constraint-violation.schema.json": "d829f986a9425e4f3ce703c98d803186b42562ad94b260422a2c23d8fcdfb116"
+  },
+  "notes": [
+    "SK-2: pins the exact @wasmagent/protocol package the vendored schemas come from.",
+    "registry_integrity/shasum are the values npm publishes for the tarball; tarball_sha256/sha512 are computed from the downloaded tarball and verified by scripts/verify-protocol-lock.mjs.",
+    "vendored_schemas are the byte digests of schemas/ after sync-schemas; check-schemas fails on any drift."
+  ]
+}

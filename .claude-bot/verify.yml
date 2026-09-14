@@ -1,14 +1,19 @@
 commands:
+  # SK-3/SK-4: delegate the schema drift gate to the canonical Makefile target,
+  # which verifies the @wasmagent/protocol tarball against the pinned vendor
+  # lock and byte-compares the vendored schemas. The former wasmagent-js
+  # commit-pinned comparison was a second, inconsistent canonical source.
   - name: schema-drift
-    cmd: "tmpdir=\"$(mktemp -d)\"; git clone --quiet --filter=blob:none --no-checkout https://github.com/WasmAgent/wasmagent-js.git \"$tmpdir/wasmagent-js\"; git -C \"$tmpdir/wasmagent-js\" checkout --quiet 51a0b036efeb9189123aa46d358a5ed18ea7824c -- packages/compliance/schemas; cmp -s schemas/constraint-ir.schema.json \"$tmpdir/wasmagent-js/packages/compliance/schemas/constraint-ir.schema.json\" && cmp -s schemas/constraint-violation.schema.json \"$tmpdir/wasmagent-js/packages/compliance/schemas/constraint-violation.schema.json\""
+    cmd: "make check-schemas"
     timeout: 3m
     level: 1
   - name: build
     cmd: go build ./...
     timeout: 5m
     level: 1
+  # SK-4: pinned tool versions — no @latest in the merge gate.
   - name: golangci-lint
-    cmd: "if [ -f .golangci.yml ] || [ -f .golangci.yaml ]; then export PATH=\"$PATH:/usr/local/go/bin:/home/dev/go/bin:$(go env GOPATH)/bin\"; export GOLANGCI_LINT_CACHE=\"$(mktemp -d)\"; command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; golangci-lint run --allow-serial-runners --timeout 10m ./...; else echo \"no .golangci.yml, skipping\"; fi"
+    cmd: "export PATH=\"$PATH:/usr/local/go/bin:/home/dev/go/bin:$(go env GOPATH)/bin\"; export GOLANGCI_LINT_CACHE=\"$(mktemp -d)\"; command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2; golangci-lint run --allow-serial-runners --timeout 10m ./..."
     timeout: 15m
     level: 2
   - name: test
@@ -16,6 +21,6 @@ commands:
     timeout: 8m
     level: 3
   - name: staticcheck-all
-    cmd: "export GOCACHE=\"$(mktemp -d)\"; export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/go/bin:/home/dev/go/bin; staticcheck -checks all ./..."
-    timeout: 5m
+    cmd: "export GOCACHE=\"$(mktemp -d)\"; export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/go/bin:/home/dev/go/bin:$(go env GOPATH)/bin; command -v staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@v0.8.1; staticcheck -checks all ./..."
+    timeout: 8m
     level: 4
