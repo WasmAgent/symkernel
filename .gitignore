@@ -1,3 +1,4 @@
 # Build artifacts
 /symkerneld
 /bin/
+wasmagent-protocol-*.tgz
