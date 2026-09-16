@@ -101,4 +101,13 @@ func TestRegisterRoutes_SymbolicExecution(t *testing.T) {
 	if !path.Feasible || len(path.Constraints) != 0 || path.Output != 7 {
 		t.Errorf("symbolic path = %+v, want feasible path with output 7", path)
 	}
+
+	// The POST /v1/verify/taint route is mounted: malformed JSON is rejected by
+	// the taint handler (400) rather than falling through to the mux 404.
+	treq := httptest.NewRequest(http.MethodPost, "/v1/verify/taint", strings.NewReader("not json"))
+	trec := httptest.NewRecorder()
+	mux.ServeHTTP(trec, treq)
+	if trec.Code != http.StatusBadRequest {
+		t.Errorf("POST /v1/verify/taint status = %d, want %d; route may not be mounted; body = %s", trec.Code, http.StatusBadRequest, trec.Body.String())
+	}
 }
